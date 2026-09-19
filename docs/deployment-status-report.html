@@ -151,7 +151,7 @@
 
   <div class="eyebrow">DEPLOYMENT LOG</div>
   <h1>agent_search_iq — デプロイ実行ログ</h1>
-  <p class="lede"><code>infra/main.bicep</code> を実際にAzureへ what-if 検証 → 本デプロイした際の記録。作成できたリソースと、未解決のまま残っている問題をまとめる。</p>
+  <p class="lede"><code>infra/main.bicep</code> を実際にAzureへ what-if 検証 → 本デプロイした際の記録。途中で発生したプロジェクト作成エラーの根本原因と、Bicepの修正内容までまとめる。</p>
   <div class="meta">
     <span>実行日 <b>2026-09-20</b></span>
     <span>サブスクリプション <b>Azure subscription 1</b> (<code>c90b917f-...a7a8</code>)</span>
@@ -161,7 +161,7 @@
 
   <section>
     <h2><span class="num">01</span>現在のAzureリソースの状態</h2>
-    <p class="section-lede">what-if検証は5リソースすべてCreate判定で成功。実デプロイでは4つが成功、プロジェクトのみ未作成。</p>
+    <p class="section-lede">what-if検証は5リソースすべてCreate判定で成功。実デプロイも最終的に全リソースが成功(プロジェクトのみ手動作成)。</p>
     <div class="table-wrap">
       <table>
         <tr><th>リソース</th><th>状態</th><th>詳細</th></tr>
@@ -186,9 +186,9 @@
           <td>sku: Standard, capacity: 1</td>
         </tr>
         <tr>
-          <td class="res-name">AI Foundryプロジェクト <code>agentsearchiq</code></td>
-          <td><span class="pill pill-bad">Failed</span></td>
-          <td>3回試行、いずれも同一エラーで失敗(詳細は次項)</td>
+          <td class="res-name">AI Foundryプロジェクト <code>aif-agentsearchiq-t6pkj7-project</code></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td>ポータルから手動作成 → 成功。根本原因を特定しBicepも修正済み(詳細は次項)<br>endpoint: <code>https://aif-agentsearchiq-t6pkj77hzmit2.services.ai.azure.com/api/projects/aif-agentsearchiq-t6pkj7-project</code></td>
         </tr>
         <tr>
           <td class="res-name">Fabric容量</td>
@@ -200,21 +200,15 @@
   </section>
 
   <section>
-    <h2><span class="num">02</span>未解決の問題 — プロジェクト作成の失敗</h2>
-    <p class="section-lede">Microsoft.CognitiveServices/accounts/projects の作成だけが一貫して失敗している。</p>
+    <h2><span class="num">02</span>解決済み — プロジェクト作成の失敗と根本原因</h2>
+    <p class="section-lede">Microsoft.CognitiveServices/accounts/projects の作成が ARM(Bicep/CLI)経由では一貫して失敗していたが、原因を特定しBicepを修正した。</p>
 
     <div class="callout">
-      <b>エラーメッセージ(3回とも同一):</b><br>
+      <b>エラーメッセージ(ARM経由の全試行で同一):</b><br>
       <code>BadRequest: Unsupported configuration. To create projects, you must enable a managed identity on your resource.</code>
     </div>
 
-    <p style="margin-top:14px;font-size:13.5px;">
-      アカウント側は <code>identity.type: SystemAssigned</code> が実際に付与され(principalId発行済み)、
-      <code>allowProjectManagement: true</code> も設定済みで、Microsoft公式のBicepサンプルと同一の構成。
-      にもかかわらずプロジェクト作成APIだけがこのエラーを返し続けている。
-    </p>
-
-    <h3>試したこと</h3>
+    <h3>試したこと(いずれもARM経由では失敗)</h3>
     <div class="timeline">
       <div class="step">
         <div class="step-icon step-bad">1</div>
@@ -230,39 +224,37 @@
       </div>
       <div class="step">
         <div class="step-icon step-bad">4</div>
-        <div class="step-body"><b>プレビュー機能 <code>Microsoft.CognitiveServices/AllowAIFoundryUpgrade</code> を登録 → プロバイダー再登録 → 60秒待機 → 再試行</b><div class="detail">機能フラグ自体は他にも複数NotRegisteredのものが見つかったが(AllowAIFoundryUpgradeForCmk, FoundryComputePreview等)、対象のものを登録済みにしても同一エラー</div></div>
+        <div class="step-body"><b>プレビュー機能 <code>Microsoft.CognitiveServices/AllowAIFoundryUpgrade</code> を登録 → プロバイダー再登録 → 60秒待機 → 再試行</b><div class="detail">同一エラー</div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-ok">5</div>
+        <div class="step-body"><b>Azure AI Foundryポータル(ai.azure.com)から手動でプロジェクトを作成</b><div class="detail">成功。<code>aif-agentsearchiq-t6pkj7-project</code></div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-ok">6</div>
+        <div class="step-body"><b>手動作成されたプロジェクトのリソースを確認 → プロジェクト自身にも SystemAssigned identity が付与されていることを発見</b><div class="detail">principalId発行済み。自分のBicepはアカウント側にしかidentityを設定しておらず、プロジェクト子リソース側のidentityが漏れていた</div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-ok">7</div>
+        <div class="step-body"><b><code>infra/modules/ai-foundry.bicep</code> の <code>project</code> リソースに <code>identity: { type: 'SystemAssigned' }</code> を追加し、<code>az resource create</code> で検証</b><div class="detail">成功(provisioningState: Succeeded)。修正を確認後、検証用の重複プロジェクトは削除済み</div></div>
       </div>
     </div>
 
     <div class="callout callout-info" style="margin-top:20px;">
-      <b>現時点の推測：</b> テンプレートの書き方の問題ではなく、このサブスクリプション/テナント(個人のMicrosoft Entra ID Free、新規のAzure subscription 1)側でのプレビュー機能の伝播遅延、またはリージョン(japaneast)側のロールアウト状況に起因している可能性が高い。ARMでの直接作成に固執せず、Azure AI Foundryポータル(<code>ai.azure.com</code>)のウィザード経由でのプロジェクト作成を試す価値がある(ポータルは内部で異なる初期化フローを使うため、この制約を回避できることがある)。
+      <b>根本原因：</b> エラーメッセージは「アカウントにmanaged identityが必要」と読めるが、実際には
+      <b>プロジェクト(accounts/projects)リソース自身にも</b> <code>identity: SystemAssigned</code> が必要だった。
+      Microsoft LearnのBicepサンプルはアカウント側のidentityしか示しておらず、プロジェクト側は省略されていたため見落としていた。
+      <code>infra/modules/ai-foundry.bicep</code> は修正済みで、今後は <code>az deployment group create</code> の1回実行だけでプロジェクトまで作成できる。
     </div>
   </section>
 
   <section>
-    <h2><span class="num">03</span>次のアクション候補</h2>
-    <div class="options">
-      <div class="option">
-        <h4>A. Azure AI Foundryポータルから手動でプロジェクトを作成</h4>
-        <p><code>ai.azure.com</code> を開き、既存アカウント <code>aif-agentsearchiq-t6pkj77hzmit2</code> に対してプロジェクトを追加する。ポータルのウィザードはARM直接呼び出しと異なる内部フローを使うため、今回の制約を回避できる可能性がある。</p>
-      </div>
-      <div class="option">
-        <h4>B. 時間を置いて再度Bicep/CLIで試す</h4>
-        <p>プレビュー機能フラグの伝播が完全に反映されるまで、数十分〜数時間かかることがある。翌日以降に <code>az resource create</code> で再試行する。</p>
-      </div>
-      <div class="option">
-        <h4>C. 既存アカウントはそのまま、プロジェクトなしで先に進める</h4>
-        <p>Search・チャット/Embeddingモデルは動作可能な状態。<code>azure.yaml</code>が参照する Foundry プロジェクト(<code>prjfoundry123</code>)は本来別物なので、Hosted Agentの疎通確認自体はこのプロジェクト作成の解決を待たずに進められる。</p>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2><span class="num">04</span>コストメモ</h2>
+    <h2><span class="num">03</span>コストメモ</h2>
     <p class="section-lede">現時点で作成済みのリソースのうち、固定費が発生するものはない。</p>
     <ul style="font-size:13.5px;color:var(--muted);padding-left:20px;">
       <li>AI Search: free tier のため $0</li>
       <li>AI Foundryアカウント自体: 固定費なし(S0は従量課金の器)</li>
+      <li>プロジェクト: 固定費なし</li>
       <li>モデルデプロイ2件: 呼び出し量に応じた従量課金のみ、未使用なら課金なし</li>
       <li>Fabric容量: 未作成のため $0</li>
     </ul>
@@ -270,6 +262,7 @@
 
   <footer>
     このログは <code>docs/azure-resources-report.html</code>(必要リソース一覧・最小コスト構成)の続き。infra一式は <code>infra/</code> ディレクトリを参照。
+    プロジェクト作成問題の修正は <code>infra/modules/ai-foundry.bicep</code> にコミット済み。
   </footer>
 
 </div>

@@ -54,6 +54,12 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   name: projectName
   location: location
   tags: tags
+  // アカウント側だけでなくプロジェクト側にもSystemAssigned IDが無いと
+  // 「Unsupported configuration. To create projects, you must enable a managed identity
+  // on your resource.」で作成が失敗する(ポータルでの手動作成時の実際の挙動から確認)
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     displayName: projectName
     description: 'agent_search_iq - Fabric IQ hosted agent project'

@@ -1,0 +1,26 @@
+# Hosted Agent本体（agent_search_iq）
+#
+# agent_search_hosted は ">=" 指定だったが、こちらは **検証済みの版に固定** する。
+# azure.yaml が dependencyResolution: remote_build のため、">=" だとデプロイのたびに
+# その時点の最新版が入り、挙動が勝手に変わる（2026-09-19 時点で既に
+# agent-framework 1.17.0 → 1.19.0、foundry-hosting b260903 → b260918 に上がっている）。
+# 下記の組み合わせで main.py の import・build_agent()・FoundryToolbox の構築・
+# ResponsesHostServer の生成までを確認済み。
+agent-framework==1.19.0
+agent-framework-foundry-hosting==1.0.0b260918
+azure-ai-agentserver-core==2.1.0
+azure-ai-agentserver-invocations==1.1.0
+starlette
+pydantic>=2.0
+
+# Fabric IQ の Toolbox 作成（setup_toolbox.py）で使う。
+# FabricIQPreviewToolboxTool / project.toolboxes.create_version は 2.6.1 で実在を確認済み。
+azure-ai-projects==2.6.1
+
+# Fabric / AI Search / OBO（agent_search_hosted と共通）
+azure-search-documents>=11.6.0b12
+azure-identity>=1.19.0
+openai>=1.50.0
+python-dotenv>=1.0.1
+requests>=2.32.0
+msal>=1.31.0

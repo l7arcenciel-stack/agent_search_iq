@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+#
+# agent_search_iq — Fabric IQ（オントロジー）を載せた別エージェント。
+# 既存の agent-search-hosted とは **エージェント名・azd環境を分けて** デプロイすること
+# （README「分離ルール」参照）。azd deploy の前に必ず `azd env list` で環境を確認する。
+
+name: agent-search-iq
+
+services:
+    agent-search-iq:
+        project: .
+        host: azure.ai.agent
+        language: python
+
+        uses:
+            - prjfoundry123
+
+        env:
+            AZURE_AI_MODEL_DEPLOYMENT_NAME: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+
+            AZURE_SEARCH_ENDPOINT: ${AZURE_SEARCH_ENDPOINT}
+            AZURE_SEARCH_API_KEY: ${AZURE_SEARCH_API_KEY}
+            AZURE_SEARCH_INDEX_NAME: ${AZURE_SEARCH_INDEX_NAME}
+
+            AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+            AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
+            AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT}
+            AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION}
+
+            AI_FOUNDRY_PROJECT_ENDPOINT: ${AI_FOUNDRY_PROJECT_ENDPOINT}
+            AI_FOUNDRY_MODEL: ${AI_FOUNDRY_MODEL}
+
+            FABRIC_WORKSPACE_ID: ${FABRIC_WORKSPACE_ID}
+            FABRIC_DATASET_ID: ${FABRIC_DATASET_ID}
+
+            # agent_search_hosted の azure.yaml では漏れていた2つ（README 4.4a には記載があった）。
+            # 未設定でも common.py の既定値で起動はするが、コンテナ内で
+            # QUALITY_TEAM_GROUP_ID が文字列 "quality-team" にフォールバックしてしまうため、
+            # こちらでは明示的に渡す。
+            CURRENT_USER_GROUPS: ${CURRENT_USER_GROUPS}
+            QUALITY_TEAM_GROUP_ID: ${QUALITY_TEAM_GROUP_ID}
+
+            OBO_TENANT_ID: ${OBO_TENANT_ID}
+            OBO_CLIENT_ID: ${OBO_CLIENT_ID}
+            OBO_CLIENT_SECRET: ${OBO_CLIENT_SECRET}
+            OBO_APP_SCOPE: ${OBO_APP_SCOPE}
+
+            # --- Fabric IQ（新規） ---
+            # setup_toolbox.py が出力する Toolbox の MCP エンドポイント。
+            # 未設定でもコンテナは起動する（Fabric IQ 抜きで動く）。
+            FABRIC_IQ_TOOLBOX_ENDPOINT: ${FABRIC_IQ_TOOLBOX_ENDPOINT}
+
+        codeConfiguration:
+            dependencyResolution: remote_build
+            entryPoint: main.py
+            runtime: python_3_13
+
+        container:
+            resources:
+                cpu: "0.5"
+                memory: 1Gi
+
+        kind: hosted
+        name: agent-search-iq
+
+        protocols:
+            - protocol: responses
+              version: 2.0.0
+            - protocol: invocations
+              version: 2.0.0
+
+    prjfoundry123:
+        host: azure.ai.project
+        endpoint: https://prjfoundry123-resource.services.ai.azure.com/api/projects/prjfoundry123
+
+infra:
+    provider: microsoft.foundry

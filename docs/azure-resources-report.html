@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent_search_iq — Azureリソース構成</title>
+<meta name="description" content="agent_search_iq（Fabric IQ統合エージェント）の環境構築に必要なAzure/Fabric/Entra IDリソースと、最小コスト構成のまとめ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;
+    --surface:#ffffff;
+    --surface-2:#eef1f8;
+    --text:#161b26;
+    --muted:#5b6478;
+    --border:#dde2ee;
+    --accent:#2f5fed;
+    --accent-soft:#e8edfe;
+    --accent-2:#0f9d8c;
+    --accent-2-soft:#e1f5f1;
+    --warn:#a3540c;
+    --warn-soft:#fbf0de;
+    --shadow: 0 1px 2px rgba(20,25,50,.04), 0 8px 24px -12px rgba(20,25,50,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1120;
+      --surface:#121a2c;
+      --surface-2:#161f36;
+      --text:#e7ebf5;
+      --muted:#93a0bd;
+      --border:#26314c;
+      --accent:#7c9dff;
+      --accent-soft:#1c2748;
+      --accent-2:#4fdcc4;
+      --accent-2-soft:#0f2e2a;
+      --warn:#f0b45e;
+      --warn-soft:#33260f;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1120;
+    --surface:#121a2c;
+    --surface-2:#161f36;
+    --text:#e7ebf5;
+    --muted:#93a0bd;
+    --border:#26314c;
+    --accent:#7c9dff;
+    --accent-soft:#1c2748;
+    --accent-2:#4fdcc4;
+    --accent-2-soft:#0f2e2a;
+    --warn:#f0b45e;
+    --warn-soft:#33260f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+    line-height:1.75;
+    padding-inline:20px;
+    padding-block:40px 80px;
+  }
+  .page{max-width:880px;margin-inline:auto;}
+
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    color:var(--accent);
+    font-weight:600;
+  }
+  h1{
+    font-family:'Noto Serif JP',serif;
+    font-size:clamp(26px,5vw,36px);
+    line-height:1.35;
+    margin:10px 0 6px;
+    text-wrap:balance;
+  }
+  .lede{
+    color:var(--muted);
+    font-size:15.5px;
+    max-width:60ch;
+    margin:0 0 18px;
+  }
+  .meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 18px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12.5px;
+    color:var(--muted);
+    border-top:1px solid var(--border);
+    padding-block:14px 0;
+    margin-bottom:36px;
+  }
+  .meta b{color:var(--text);font-weight:500;}
+
+  h2{
+    font-family:'Noto Serif JP',serif;
+    font-size:20px;
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin:52px 0 6px;
+  }
+  h2 .num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    color:var(--accent);
+    background:var(--accent-soft);
+    padding:2px 7px;
+    border-radius:5px;
+  }
+  h2 + .section-lede{color:var(--muted);font-size:14.5px;margin:0 0 20px;max-width:64ch;}
+  h3{font-size:15px;margin:26px 0 10px;color:var(--text);}
+
+  section:first-of-type h2{margin-top:0;}
+
+  /* ---- architecture paths ---- */
+  .paths{display:flex;flex-direction:column;gap:10px;}
+  .path-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:14px 16px;
+    box-shadow:var(--shadow);
+  }
+  .path-head{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap;}
+  .path-tag{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    font-weight:600;
+    padding:2px 7px;
+    border-radius:5px;
+    color:#fff;
+  }
+  .tag-a{background:var(--accent);}
+  .tag-b{background:var(--accent-2);}
+  .tag-c{background:#a3540c;}
+  .path-title{font-weight:700;font-size:14.5px;}
+  .path-runner{margin-left:auto;font-size:12px;color:var(--muted);}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12.5px;}
+  .hop{
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:4px 9px;
+    white-space:nowrap;
+  }
+  .arrow{color:var(--muted);}
+
+  .callout{
+    border:1px solid var(--warn);
+    background:var(--warn-soft);
+    border-radius:10px;
+    padding:12px 14px;
+    font-size:13.5px;
+    color:var(--text);
+    margin-top:16px;
+  }
+  .callout b{color:var(--warn);}
+  .callout code{font-family:'JetBrains Mono',monospace;}
+
+  /* ---- resource grid ---- */
+  .cat{margin-top:28px;}
+  .cat-title{
+    display:flex;align-items:center;gap:8px;
+    font-weight:700;font-size:14.5px;margin-bottom:10px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;}
+  .dot-foundry{background:var(--accent);}
+  .dot-search{background:#7a4fd6;}
+  .dot-fabric{background:var(--accent-2);}
+  .dot-entra{background:#c0392b;}
+  .dot-conn{background:#c98a1f;}
+
+  .res-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .res-table th{
+    text-align:left;
+    font-family:'JetBrains Mono',monospace;
+    font-weight:500;
+    font-size:11px;
+    letter-spacing:.04em;
+    color:var(--muted);
+    padding:6px 10px;
+    border-bottom:1px solid var(--border);
+  }
+  .res-table td{
+    padding:9px 10px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  .res-table tr:last-child td{border-bottom:none;}
+  .res-table code{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    background:var(--surface-2);
+    padding:1px 5px;
+    border-radius:4px;
+  }
+  .res-name{font-weight:700;}
+  .table-wrap{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:6px 8px;
+    box-shadow:var(--shadow);
+    overflow-x:auto;
+  }
+
+  /* ---- setup steps ---- */
+  ol.steps{list-style:none;margin:0;padding:0;counter-reset:step;display:flex;flex-direction:column;gap:2px;}
+  ol.steps li{
+    counter-increment:step;
+    display:flex;gap:12px;
+    padding:11px 4px;
+    border-bottom:1px dashed var(--border);
+    font-size:14px;
+  }
+  ol.steps li:last-child{border-bottom:none;}
+  ol.steps li::before{
+    content:counter(step);
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    font-weight:600;
+    color:var(--accent);
+    background:var(--accent-soft);
+    width:22px;height:22px;flex:none;
+    border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  ol.steps b{font-weight:700;}
+  ol.steps code{font-family:'JetBrains Mono',monospace;}
+  .who{
+    display:inline-block;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    color:var(--muted);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:0 5px;
+    margin-left:6px;
+  }
+
+  /* ---- cost section ---- */
+  .cost-table td.num, .cost-table th.num{font-family:'JetBrains Mono',monospace;text-align:right;white-space:nowrap;}
+  .cost-table td.num{font-weight:600;}
+  .cost-total td{border-top:2px solid var(--border);font-weight:700;}
+  .cost-total td.num{color:var(--accent);}
+  .badge-fixed{color:var(--warn);font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--warn);border-radius:4px;padding:0 5px;}
+  .badge-usage{color:var(--accent-2);font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid var(--accent-2);border-radius:4px;padding:0 5px;}
+
+  .tips{margin:16px 0 0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px;}
+  .tips li{display:flex;gap:9px;font-size:14px;}
+  .tips li::before{content:"→";color:var(--accent-2);font-weight:700;flex:none;}
+
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;}
+  @media (max-width:640px){.two-col{grid-template-columns:1fr;}}
+  .plan-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:16px;box-shadow:var(--shadow);
+  }
+  .plan-card h4{margin:0 0 4px;font-size:14.5px;}
+  .plan-card .plan-price{
+    font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:var(--accent);margin:4px 0 10px;
+  }
+  .plan-price small{font-size:12px;color:var(--muted);font-weight:400;}
+  .plan-card ul{margin:0;padding-left:18px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:5px;}
+  .plan-card ul li::marker{color:var(--accent-2);}
+
+  footer{
+    margin-top:56px;
+    padding-top:18px;
+    border-top:1px solid var(--border);
+    font-size:12px;
+    color:var(--muted);
+  }
+  footer ol{padding-left:18px;margin:8px 0 0;display:flex;flex-direction:column;gap:4px;}
+  footer a{color:var(--muted);}
+
+  @media (max-width:640px){
+    .res-table{font-size:12.5px;}
+    .path-runner{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="eyebrow">INFRASTRUCTURE REPORT</div>
+  <h1>agent_search_iq — Azureリソース構成</h1>
+  <p class="lede">Fabric IQ（オントロジー）を追加した Hosted Agent の環境構築に必要な Azure / Microsoft Fabric / Entra ID リソースの一覧と、最小コストで組む場合の構成案。</p>
+  <div class="meta">
+    <span>作成日 <b>2026-09-20</b></span>
+    <span>対象 <b>kojin/01_biz/agent_search_iq</b></span>
+    <span>ベース <b>azure.yaml / README.md</b></span>
+  </div>
+
+  <section>
+    <h2><span class="num">01</span>全体構成 — 誰の権限で動くか</h2>
+    <p class="section-lede">3つのツール（AI Search・Power BI・Fabric IQ）はそれぞれ別の経路で権限が解決される。ここがこのデモの核心であり、構成ミスが起きやすい箇所でもある。</p>
+
+    <div class="paths">
+      <div class="path-card">
+        <div class="path-head">
+          <span class="path-tag tag-a">Path A</span>
+          <span class="path-title">文書検索（AI Search）</span>
+          <span class="path-runner">実行権限 = サインインユーザー本人</span>
+        </div>
+        <div class="flow">
+          <span class="hop">サインイン</span><span class="arrow">→</span>
+          <span class="hop">OBO トークン交換</span><span class="arrow">→</span>
+          <span class="hop">Entra ID グループ</span><span class="arrow">→</span>
+          <span class="hop">AI Search（ACLフィルタ）</span>
+        </div>
+      </div>
+
+      <div class="path-card">
+        <div class="path-head">
+          <span class="path-tag tag-b">Path B</span>
+          <span class="path-title">構造化データ（Power BI / Fabric）</span>
+          <span class="path-runner">実行権限 = サインインユーザー本人</span>
+        </div>
+        <div class="flow">
+          <span class="hop">サインイン</span><span class="arrow">→</span>
+          <span class="hop">OBO トークン交換</span><span class="arrow">→</span>
+          <span class="hop">Power BI トークン</span><span class="arrow">→</span>
+          <span class="hop">Semantic Model（RLS）</span>
+        </div>
+      </div>
+
+      <div class="path-card">
+        <div class="path-head">
+          <span class="path-tag tag-c">Path C</span>
+          <span class="path-title">Fabric IQ（オントロジー）</span>
+          <span class="path-runner">実行権限 = Foundry の呼び出し元</span>
+        </div>
+        <div class="flow">
+          <span class="hop">Foundry 呼び出し元</span><span class="arrow">→</span>
+          <span class="hop">x-agent-foundry-call-id</span><span class="arrow">→</span>
+          <span class="hop">Toolbox (MCP)</span><span class="arrow">→</span>
+          <span class="hop">オントロジー</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>落とし穴：</b> デモUIが Foundry をオペレーターの <code>az login</code> で呼ぶ既定構成だと、Path A/B は本人・Path C だけオペレーター権限になり「誰か」がずれる。<code>FOUNDRY_CALL_AS=user</code> を設定し、サインイン本人のトークンで Foundry を呼ぶ構成にすること。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>必要なリソース一覧</h2>
+    <p class="section-lede">カテゴリ別。環境変数名は <code style="font-family:'JetBrains Mono',monospace;background:var(--surface-2);padding:1px 5px;border-radius:4px">azure.yaml</code> / <code style="font-family:'JetBrains Mono',monospace;background:var(--surface-2);padding:1px 5px;border-radius:4px">.env.example</code> に対応。</p>
+
+    <div class="cat">
+      <div class="cat-title"><span class="dot dot-foundry"></span>Azure AI Foundry</div>
+      <div class="table-wrap">
+        <table class="res-table">
+          <tr><th>リソース</th><th>用途</th><th>関連設定</th></tr>
+          <tr><td class="res-name">Foundry リソース＋プロジェクト</td><td>Hosted Agent 自体のホスト先（<code>host: azure.ai.agent</code>）。azd で直接デプロイ</td><td><code>AI_FOUNDRY_PROJECT_ENDPOINT</code></td></tr>
+          <tr><td class="res-name">チャットモデル デプロイ</td><td>エージェント応答生成（例 gpt-4.1-mini）</td><td><code>AZURE_AI_MODEL_DEPLOYMENT_NAME</code> / <code>AI_FOUNDRY_MODEL</code></td></tr>
+          <tr><td class="res-name">Embedding モデル デプロイ</td><td>文書ベクトル化（例 text-embedding-3-small）</td><td><code>AZURE_OPENAI_EMBEDDING_DEPLOYMENT</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="cat">
+      <div class="cat-title"><span class="dot dot-search"></span>Azure AI Search</div>
+      <div class="table-wrap">
+        <table class="res-table">
+          <tr><th>リソース</th><th>用途</th><th>関連設定</th></tr>
+          <tr><td class="res-name">AI Search サービス</td><td>文書検索。ベクトル検索＋セマンティック構成（<code>default-semantic</code>）が必要</td><td><code>AZURE_SEARCH_ENDPOINT</code> / <code>_API_KEY</code></td></tr>
+          <tr><td class="res-name">インデックス</td><td>ベクトルフィールド + グループACLフィールドを持つインデックス（既定名 <code>poc-documents</code>）</td><td><code>AZURE_SEARCH_INDEX_NAME</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="cat">
+      <div class="cat-title"><span class="dot dot-fabric"></span>Microsoft Fabric / Power BI</div>
+      <div class="table-wrap">
+        <table class="res-table">
+          <tr><th>リソース</th><th>用途</th><th>関連設定</th></tr>
+          <tr><td class="res-name">Fabric 容量（F SKU）</td><td>ワークスペース・オントロジーの実行基盤</td><td>—</td></tr>
+          <tr><td class="res-name">Fabric ワークスペース</td><td>セマンティックモデル・オントロジーの置き場</td><td><code>FABRIC_WORKSPACE_ID</code></td></tr>
+          <tr><td class="res-name">セマンティックモデル</td><td><b>Direct Lake モード必須</b>（オントロジーの実データバインドはDirect Lakeのみ対応。Importモードなら要作り直し）</td><td><code>FABRIC_DATASET_ID</code></td></tr>
+          <tr><td class="res-name">レイクハウス（必要時）</td><td>Importモデルの場合、同データをDirect Lake化するための置き場</td><td>—</td></tr>
+          <tr><td class="res-name">オントロジー（Fabric IQ, Preview）</td><td>Fabric管理ポータルで「Ontology item」テナント設定を有効化 → 作成・データバインド・リフレッシュ</td><td><code>FABRIC_IQ_ONTOLOGY_*</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="cat">
+      <div class="cat-title"><span class="dot dot-entra"></span>Entra ID（認証・認可）</div>
+      <div class="table-wrap">
+        <table class="res-table">
+          <tr><th>リソース</th><th>用途</th><th>関連設定</th></tr>
+          <tr><td class="res-name">OBO用アプリ登録</td><td>AI Search / Power BI を本人権限で呼ぶ（既存流用可）</td><td><code>OBO_TENANT_ID</code> / <code>OBO_CLIENT_ID</code> / <code>OBO_CLIENT_SECRET</code></td></tr>
+          <tr><td class="res-name">Fabric IQ 接続用アプリ登録</td><td>Power BI委任権限 <code>Item.Execute.All</code> / <code>Item.Read.All</code> ＋管理者同意。<span class="who">要Global Admin</span></td><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td></tr>
+          <tr><td class="res-name">サインイン用アプリへの追加権限</td><td><code>https://ai.azure.com</code> 向け委任権限（<code>FOUNDRY_CALL_AS=user</code>用）</td><td>—</td></tr>
+          <tr><td class="res-name">セキュリティグループ</td><td>文書ACL用（品質チーム等）</td><td><code>QUALITY_TEAM_GROUP_ID</code> / <code>CURRENT_USER_GROUPS</code></td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="cat">
+      <div class="cat-title"><span class="dot dot-conn"></span>Foundry内の接続設定</div>
+      <div class="table-wrap">
+        <table class="res-table">
+          <tr><th>リソース</th><th>用途</th><th>関連設定</th></tr>
+          <tr><td class="res-name">Fabric IQ Connection</td><td>Settings &gt; Connections &gt; New connection &gt; Fabric IQ</td><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td></tr>
+          <tr><td class="res-name">Toolbox（MCPエンドポイント）</td><td><code>setup_toolbox.py</code> 実行で生成</td><td><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code></td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>セットアップの順序</h2>
+    <p class="section-lede">README 3章の要約。Global Administrator 権限が必要な工程に注意。</p>
+    <ol class="steps">
+      <li><div><b>セマンティックモデルのストレージモードを確認</b> — Import の場合はレイクハウス＋Direct Lake化が先に必要<span class="who">結論が変わる分岐点</span></div></li>
+      <li><div><b>Fabric管理ポータルで Ontology item (preview) を有効化</b><span class="who">Fabric管理者</span></div></li>
+      <li><div><b>オントロジー作成 → データバインド → リフレッシュ</b>（上流更新は手動リフレッシュが必要）</div></li>
+      <li><div><b>Fabric IQ 接続用 Entra アプリ登録</b>（委任権限＋管理者同意＋シークレット＋リダイレクトURI）<span class="who">Global Admin</span></div></li>
+      <li><div><b>Foundry ポータルで Fabric IQ Connection を作成</b>し接続IDを控える</div></li>
+      <li><div><b><code>python setup_toolbox.py</code> を実行</b>し Toolbox の MCP エンドポイントを控える</div></li>
+      <li><div><b>サインイン用アプリに ai.azure.com 向け委任権限を追加</b>＋管理者同意</div></li>
+      <li><div><b>各デモアカウントに Foundry User 相当のロールを付与</b>（無いと403）</div></li>
+      <li><div><b>各アカウントで Fabric IQ 接続の OAuth 同意を実施</b>（初回質問時に同意リンクが出る）</div></li>
+      <li><div><b><code>azd env new agent-search-iq</code> → <code>azd env list</code> で確認 → <code>azd deploy</code></b><span class="who">既存環境と分離必須</span></div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span>最小コスト構成（個人利用・トライアル優先）</h2>
+    <p class="section-lede">会社経費ではなく個人負担という前提で、まず無料トライアルで賄える範囲を最大化し、トライアル終了後に本当に必要な分だけ課金する構成。米国リスト価格ベースの概算（2026年9月時点、地域・為替により変動）。</p>
+
+    <div class="callout" style="border-color:var(--accent);background:var(--accent-soft);">
+      <b>前提：</b> Fabricトライアル容量・Power BI個人トライアルは<b>職場または学校（組織）アカウント</b>が必要で、個人のOutlook/Gmailアドレスでは開始できない。既存のEntra IDテナントが無ければ、<b>Microsoft 365 Developer Program</b>（無料E5サンドボックス、開発活動があれば90日ごとに自動更新）でテナントを用意するのが定石。
+    </div>
+
+    <h3 style="margin-top:28px">最初の30〜60日間：実質 $0 構成</h3>
+    <div class="table-wrap">
+      <table class="res-table cost-table">
+        <tr><th>リソース</th><th>使う無料枠</th><th class="num">期間</th></tr>
+        <tr>
+          <td class="res-name">Entra ID テナント</td>
+          <td>既存テナント、無ければ <b>Microsoft 365 Developer Program</b>（無料E5サンドボックス。開発活動があれば90日毎に自動更新）</td>
+          <td class="num">継続 <span class="badge-usage">無料</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Fabric 容量</td>
+          <td><b>Fabric トライアル容量</b>（64 CU相当＋OneLake 1TB付き、クレカ不要）。Direct Lake・オントロジー検証はこの間フルに使える</td>
+          <td class="num">60日間 <span class="badge-usage">無料</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Power BI ライセンス</td>
+          <td>Fabricトライアル開始時に<b>Power BI個人トライアルが自動付与</b>（Power BIライセンス未保持の場合）</td>
+          <td class="num">60日間 <span class="badge-usage">無料</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Azure サブスクリプション</td>
+          <td><b>Azure無料アカウント</b>（$200クレジット）。AI Search / AI Foundry・OpenAI の検証利用をここから支払う</td>
+          <td class="num">30日間 <span class="badge-usage">$200まで無料</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Azure AI Search</td>
+          <td><b>Free tier（F0）</b>を選べば、クレジット消化後も恒久的に$0（50MB・3インデックス・セマンティックランカー月1,000クエリまでの制約あり）</td>
+          <td class="num">継続 <span class="badge-usage">無料</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Hosted Agent実行 / AI Foundryモデル</td>
+          <td>完全従量課金（gpt-4.1-mini + text-embedding-3-small）。個人検証規模ならAzureクレジット$200の範囲内で収まる</td>
+          <td class="num">従量 <span class="badge-usage">クレジット内</span></td>
+        </tr>
+        <tr class="cost-total">
+          <td>実質負担</td>
+          <td>Azure $200クレジットの範囲に収まれば</td>
+          <td class="num">$0</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>トライアル終了後、最低限だけ課金する場合</h3>
+    <div class="table-wrap">
+      <table class="res-table cost-table">
+        <tr><th>リソース</th><th>継続方法</th><th class="num">目安コスト</th></tr>
+        <tr>
+          <td class="res-name">Azure AI Search</td>
+          <td>Free tier のまま維持（安定運用が要るならBasic $73.73/月に切替）</td>
+          <td class="num">$0〜73.73/月</td>
+        </tr>
+        <tr>
+          <td class="res-name">Fabric 容量</td>
+          <td>F2をPay-as-you-goで<b>使う時だけ起動→使い終わったら即一時停止</b>（秒単位課金）。月数時間の検証なら数ドル程度</td>
+          <td class="num">目安 $2〜10/月 <span class="badge-usage">従量</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Power BI Pro</td>
+          <td>M365 Developer Programを開発活動で更新し続ければ$0のまま。更新が切れたら必要な分だけ$14/ユーザー/月</td>
+          <td class="num">$0〜28/月</td>
+        </tr>
+        <tr>
+          <td class="res-name">AI Foundry / OpenAI</td>
+          <td>従量課金のみ。個人検証規模なら僅少</td>
+          <td class="num">$1〜5/月 <span class="badge-usage">従量</span></td>
+        </tr>
+        <tr>
+          <td class="res-name">Entra ID / Hosted Agent実行</td>
+          <td>追加課金なし／コンテナ従量課金わずか</td>
+          <td class="num">$0〜1/月</td>
+        </tr>
+        <tr class="cost-total">
+          <td>継続時の合計目安</td>
+          <td>すべて無料枠を使い切った最悪ケース</td>
+          <td class="num">$3〜108/月</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>コストを抑えるポイント</h3>
+    <ul class="tips">
+      <li>まず<b>Fabricトライアル容量（60日・無料）</b>でDirect Lake化とオントロジー検証を終わらせてしまう。ここが唯一の重い固定費候補なので、トライアル中に「本当に必要か」を見極める</li>
+      <li>Fabric容量を有償化した後も、<b>デモ前後だけ起動し使い終わったら一時停止</b>する（秒単位課金なので停止すれば$0）。Fabric管理ポータルまたはAzureポータルから操作可能</li>
+      <li>Power BI Proは<b>M365 Developer Program（開発活動があれば自動更新）</b>や<b>個人トライアル60日</b>を使い倒し、有償化は最後の手段にする</li>
+      <li>Azure AI Searchは<b>Free tierのまま</b>運用できないか検討する。SLA無し・長期非アクティブで削除される制約はあるが、個人の検証用途なら許容できることが多い</li>
+      <li>Azureサブスクリプション自体は<b>Pay-As-You-Goに切り替えても常時無料サービス（65以上）は残る</b>ため、$200クレジットを使い切った後もAI Search Free等は継続できる</li>
+      <li>Foundry / OpenAI 側は完全従量課金なので、<b>検証回数を絞れば固定費は発生しない</b></li>
+    </ul>
+  </section>
+
+  <footer>
+    このレポートは azure.yaml / .env.example / README.md（2026-09-19時点）を基に作成。価格・トライアル条件は米国リスト価格および2026年9月時点の情報であり、実際の条件はリージョン・為替・契約形態・Microsoftの提供状況により異なる。README記載の通り、実機（Azure）上での動作確認はまだ行われていない。
+    <ol>
+      <li><a href="https://learn.microsoft.com/en-us/azure/search/search-sku-tier" target="_blank" rel="noopener">Choose a pricing model and service tier - Azure AI Search | Microsoft Learn</a></li>
+      <li><a href="https://www.microsoft.com/en-us/power-platform/products/power-bi/pricing" target="_blank" rel="noopener">Power BI: Pricing Plan | Microsoft Power Platform</a></li>
+      <li><a href="https://blog.fabric.microsoft.com/en-us/blog/announcing-microsoft-fabric-capacities-are-available-for-purchase/" target="_blank" rel="noopener">Announcing Microsoft Fabric capacities are available for purchase | Microsoft Fabric Community</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/fabric/fundamentals/fabric-trial" target="_blank" rel="noopener">Fabric trial capacity | Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/office/developer-program/microsoft-365-developer-program-get-started" target="_blank" rel="noopener">Set up a Microsoft 365 developer sandbox subscription | Microsoft Learn</a></li>
+      <li><a href="https://azure.microsoft.com/en-us/pricing/purchase-options/azure-account" target="_blank" rel="noopener">Create Your Azure Free Account | Microsoft Azure</a></li>
+    </ol>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>デプロイ実行ログ</title>
+<meta name="description" content="infra/main.bicep を実際にAzureへデプロイした際の状況・成功/失敗したリソース・未解決の問題と試した対処の記録">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f7fb;
+    --surface:#ffffff;
+    --surface-2:#eef1f8;
+    --text:#161b26;
+    --muted:#5b6478;
+    --border:#dde2ee;
+    --accent:#2f5fed;
+    --accent-soft:#e8edfe;
+    --ok:#0f9d6e;
+    --ok-soft:#e1f7ef;
+    --warn:#a3540c;
+    --warn-soft:#fbf0de;
+    --bad:#c0392b;
+    --bad-soft:#fbe9e7;
+    --shadow: 0 1px 2px rgba(20,25,50,.04), 0 8px 24px -12px rgba(20,25,50,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1120;
+      --surface:#121a2c;
+      --surface-2:#161f36;
+      --text:#e7ebf5;
+      --muted:#93a0bd;
+      --border:#26314c;
+      --accent:#7c9dff;
+      --accent-soft:#1c2748;
+      --ok:#3fd6a4;
+      --ok-soft:#0f2e26;
+      --warn:#f0b45e;
+      --warn-soft:#33260f;
+      --bad:#ff6b5e;
+      --bad-soft:#3a1815;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1120;
+    --surface:#121a2c;
+    --surface-2:#161f36;
+    --text:#e7ebf5;
+    --muted:#93a0bd;
+    --border:#26314c;
+    --accent:#7c9dff;
+    --accent-soft:#1c2748;
+    --ok:#3fd6a4;
+    --ok-soft:#0f2e26;
+    --warn:#f0b45e;
+    --warn-soft:#33260f;
+    --bad:#ff6b5e;
+    --bad-soft:#3a1815;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans JP','Hiragino Sans',sans-serif;
+    line-height:1.75;
+    padding-inline:20px;
+    padding-block:40px 80px;
+  }
+  .page{max-width:880px;margin-inline:auto;}
+
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    color:var(--accent);
+    font-weight:600;
+  }
+  h1{
+    font-family:'Noto Serif JP',serif;
+    font-size:clamp(24px,5vw,34px);
+    line-height:1.35;
+    margin:10px 0 6px;
+    text-wrap:balance;
+  }
+  .lede{color:var(--muted);font-size:15px;max-width:64ch;margin:0 0 18px;}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:8px 18px;
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);
+    border-top:1px solid var(--border);padding-block:14px 0;margin-bottom:36px;
+  }
+  .meta b{color:var(--text);font-weight:500;}
+
+  h2{
+    font-family:'Noto Serif JP',serif;font-size:19px;
+    display:flex;align-items:baseline;gap:10px;margin:48px 0 6px;
+  }
+  h2 .num{
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);
+    background:var(--accent-soft);padding:2px 7px;border-radius:5px;
+  }
+  h2 + .section-lede{color:var(--muted);font-size:14px;margin:0 0 18px;max-width:66ch;}
+  h3{font-size:14.5px;margin:22px 0 10px;}
+  section:first-of-type h2{margin-top:0;}
+  code{font-family:'JetBrains Mono',monospace;font-size:.92em;background:var(--surface-2);padding:1px 5px;border-radius:4px;}
+
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 8px;box-shadow:var(--shadow);overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-family:'JetBrains Mono',monospace;font-weight:500;font-size:11px;letter-spacing:.04em;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .res-name{font-weight:700;}
+
+  .pill{display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;}
+  .pill-ok{color:var(--ok);background:var(--ok-soft);}
+  .pill-bad{color:var(--bad);background:var(--bad-soft);}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;}
+
+  .callout{border:1px solid var(--bad);background:var(--bad-soft);border-radius:10px;padding:14px 16px;font-size:13.5px;margin-top:14px;}
+  .callout b{color:var(--bad);}
+  .callout-info{border-color:var(--accent);background:var(--accent-soft);}
+  .callout-info b{color:var(--accent);}
+
+  .timeline{display:flex;flex-direction:column;gap:0;margin-top:8px;}
+  .step{display:flex;gap:12px;padding:10px 4px;border-bottom:1px dashed var(--border);font-size:13.5px;align-items:flex-start;}
+  .step:last-child{border-bottom:none;}
+  .step-icon{width:20px;height:20px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700;margin-top:1px;}
+  .step-ok{background:var(--ok-soft);color:var(--ok);}
+  .step-bad{background:var(--bad-soft);color:var(--bad);}
+  .step-body b{display:block;margin-bottom:2px;}
+  .step-body .detail{color:var(--muted);font-size:12.5px;}
+
+  .options{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+  .option{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow);}
+  .option h4{margin:0 0 4px;font-size:14px;}
+  .option p{margin:0;color:var(--muted);font-size:13px;}
+
+  footer{margin-top:52px;padding-top:16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);}
+
+  @media (max-width:640px){ table{font-size:12.5px;} }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="eyebrow">DEPLOYMENT LOG</div>
+  <h1>agent_search_iq — デプロイ実行ログ</h1>
+  <p class="lede"><code>infra/main.bicep</code> を実際にAzureへ what-if 検証 → 本デプロイした際の記録。作成できたリソースと、未解決のまま残っている問題をまとめる。</p>
+  <div class="meta">
+    <span>実行日 <b>2026-09-20</b></span>
+    <span>サブスクリプション <b>Azure subscription 1</b> (<code>c90b917f-...a7a8</code>)</span>
+    <span>テナント <b>naohirolab.onmicrosoft.com</b></span>
+    <span>リソースグループ <b>rg-agent-search-iq</b> (japaneast)</span>
+  </div>
+
+  <section>
+    <h2><span class="num">01</span>現在のAzureリソースの状態</h2>
+    <p class="section-lede">what-if検証は5リソースすべてCreate判定で成功。実デプロイでは4つが成功、プロジェクトのみ未作成。</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>リソース</th><th>状態</th><th>詳細</th></tr>
+        <tr>
+          <td class="res-name">AI Search サービス<br><code>srch-agentsearchiq-t6pkj77hzmit2</code></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td>free tier, status: running</td>
+        </tr>
+        <tr>
+          <td class="res-name">AI Foundryアカウント<br><code>aif-agentsearchiq-t6pkj77hzmit2</code></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td>kind: AIServices, identity: SystemAssigned (principalId発行済み), allowProjectManagement: true<br>endpoint: <code>https://aif-agentsearchiq-t6pkj77hzmit2.cognitiveservices.azure.com/</code></td>
+        </tr>
+        <tr>
+          <td class="res-name">モデルデプロイ <code>gpt-4.1-mini</code></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td>sku: Standard, capacity: 1 (1,000 TPM)</td>
+        </tr>
+        <tr>
+          <td class="res-name">モデルデプロイ <code>text-embedding-3-small</code></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td>sku: Standard, capacity: 1</td>
+        </tr>
+        <tr>
+          <td class="res-name">AI Foundryプロジェクト <code>agentsearchiq</code></td>
+          <td><span class="pill pill-bad">Failed</span></td>
+          <td>3回試行、いずれも同一エラーで失敗(詳細は次項)</td>
+        </tr>
+        <tr>
+          <td class="res-name">Fabric容量</td>
+          <td><span class="pill pill-ok">Skipped (想定通り)</span></td>
+          <td><code>deployFabricCapacity=false</code>のため未作成。個人利用のコスト最小方針通り</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>未解決の問題 — プロジェクト作成の失敗</h2>
+    <p class="section-lede">Microsoft.CognitiveServices/accounts/projects の作成だけが一貫して失敗している。</p>
+
+    <div class="callout">
+      <b>エラーメッセージ(3回とも同一):</b><br>
+      <code>BadRequest: Unsupported configuration. To create projects, you must enable a managed identity on your resource.</code>
+    </div>
+
+    <p style="margin-top:14px;font-size:13.5px;">
+      アカウント側は <code>identity.type: SystemAssigned</code> が実際に付与され(principalId発行済み)、
+      <code>allowProjectManagement: true</code> も設定済みで、Microsoft公式のBicepサンプルと同一の構成。
+      にもかかわらずプロジェクト作成APIだけがこのエラーを返し続けている。
+    </p>
+
+    <h3>試したこと</h3>
+    <div class="timeline">
+      <div class="step">
+        <div class="step-icon step-bad">1</div>
+        <div class="step-body"><b>infra/main.bicep をそのまま再デプロイ</b><div class="detail">account/deployments成功、project失敗。同一エラー</div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-bad">2</div>
+        <div class="step-body"><b>90秒待機してから再デプロイ(ID伝播待ちを想定)</b><div class="detail">同一エラー</div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-bad">3</div>
+        <div class="step-body"><b><code>az resource create</code> でプロジェクトだけを直接作成(アカウントを再PUTしない)</b><div class="detail">同一エラー。アカウント再送信によるID再伝播の問題ではないことを確認</div></div>
+      </div>
+      <div class="step">
+        <div class="step-icon step-bad">4</div>
+        <div class="step-body"><b>プレビュー機能 <code>Microsoft.CognitiveServices/AllowAIFoundryUpgrade</code> を登録 → プロバイダー再登録 → 60秒待機 → 再試行</b><div class="detail">機能フラグ自体は他にも複数NotRegisteredのものが見つかったが(AllowAIFoundryUpgradeForCmk, FoundryComputePreview等)、対象のものを登録済みにしても同一エラー</div></div>
+      </div>
+    </div>
+
+    <div class="callout callout-info" style="margin-top:20px;">
+      <b>現時点の推測：</b> テンプレートの書き方の問題ではなく、このサブスクリプション/テナント(個人のMicrosoft Entra ID Free、新規のAzure subscription 1)側でのプレビュー機能の伝播遅延、またはリージョン(japaneast)側のロールアウト状況に起因している可能性が高い。ARMでの直接作成に固執せず、Azure AI Foundryポータル(<code>ai.azure.com</code>)のウィザード経由でのプロジェクト作成を試す価値がある(ポータルは内部で異なる初期化フローを使うため、この制約を回避できることがある)。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>次のアクション候補</h2>
+    <div class="options">
+      <div class="option">
+        <h4>A. Azure AI Foundryポータルから手動でプロジェクトを作成</h4>
+        <p><code>ai.azure.com</code> を開き、既存アカウント <code>aif-agentsearchiq-t6pkj77hzmit2</code> に対してプロジェクトを追加する。ポータルのウィザードはARM直接呼び出しと異なる内部フローを使うため、今回の制約を回避できる可能性がある。</p>
+      </div>
+      <div class="option">
+        <h4>B. 時間を置いて再度Bicep/CLIで試す</h4>
+        <p>プレビュー機能フラグの伝播が完全に反映されるまで、数十分〜数時間かかることがある。翌日以降に <code>az resource create</code> で再試行する。</p>
+      </div>
+      <div class="option">
+        <h4>C. 既存アカウントはそのまま、プロジェクトなしで先に進める</h4>
+        <p>Search・チャット/Embeddingモデルは動作可能な状態。<code>azure.yaml</code>が参照する Foundry プロジェクト(<code>prjfoundry123</code>)は本来別物なので、Hosted Agentの疎通確認自体はこのプロジェクト作成の解決を待たずに進められる。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span>コストメモ</h2>
+    <p class="section-lede">現時点で作成済みのリソースのうち、固定費が発生するものはない。</p>
+    <ul style="font-size:13.5px;color:var(--muted);padding-left:20px;">
+      <li>AI Search: free tier のため $0</li>
+      <li>AI Foundryアカウント自体: 固定費なし(S0は従量課金の器)</li>
+      <li>モデルデプロイ2件: 呼び出し量に応じた従量課金のみ、未使用なら課金なし</li>
+      <li>Fabric容量: 未作成のため $0</li>
+    </ul>
+  </section>
+
+  <footer>
+    このログは <code>docs/azure-resources-report.html</code>(必要リソース一覧・最小コスト構成)の続き。infra一式は <code>infra/</code> ディレクトリを参照。
+  </footer>
+
+</div>
+</body>
+</html>

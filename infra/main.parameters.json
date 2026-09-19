@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "agentsearchiq"
+    },
+    "searchSku": {
+      "value": "free"
+    },
+    "chatModelName": {
+      "value": "gpt-4.1-mini"
+    },
+    "chatModelCapacity": {
+      "value": 1
+    },
+    "embeddingModelName": {
+      "value": "text-embedding-3-small"
+    },
+    "embeddingModelCapacity": {
+      "value": 1
+    },
+    "deployFabricCapacity": {
+      "value": false
+    },
+    "fabricSkuName": {
+      "value": "F2"
+    },
+    "fabricAdminMembers": {
+      "value": []
+    }
+  }
+}

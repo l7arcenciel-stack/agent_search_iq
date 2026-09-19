@@ -1,4 +1,5 @@
 .azure
+*.msi
 .env
 .env.local
 .env.*.local

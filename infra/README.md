@@ -1,7 +1,7 @@
 # infra/ — agent_search_iq の補助リソース(Bicep)
 
 `azure.yaml` は `infra: provider: microsoft.foundry` で、Hosted Agent 自体は既存の
-Foundryプロジェクト(`prjfoundry123`)が存在する前提でデプロイされる(`azd provision` の対象外)。
+Foundryプロジェクト(`AI_FOUNDRY_PROJECT_ENDPOINT` が指す先)が存在する前提でデプロイされる(`azd provision` の対象外)。
 
 このディレクトリは、その前提となる **土台のAzureリソース** を用意するための独立したBicepテンプレート。
 `azd provision` ではなく `az deployment group create` から実行する。

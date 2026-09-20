@@ -51,3 +51,7 @@ requirements-demo.txt
 demo_chat_iq.py
 demo_chat_simple.py
 setup_toolbox.py
+
+# Fabric のノートブック上で実行するコード一式。Fabric 側で動かすものなので
+# エージェントのコンテナには不要（pyspark 依存のため、含めると import 解決で問題になりうる）。
+fabric_notebooks/

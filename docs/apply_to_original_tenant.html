@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>元テナントへの反映 手順書</title>
+<meta name="description" content="新テナントで検証した Fabric IQ 権限デモを、既存環境を壊さずに元のテナントへ追加するための差分手順書">
+<style>
+  :root{
+    --bg:#f5f7fb; --surface:#ffffff; --surface-2:#eef1f8;
+    --text:#161b26; --muted:#5b6478; --border:#dde2ee;
+    --accent:#2f5fed; --accent-soft:#e8edfe;
+    --accent-2:#0f9d8c; --accent-2-soft:#e1f5f1;
+    --warn:#a3540c; --warn-soft:#fbf0de;
+    --danger:#b3261e; --danger-soft:#fdecea;
+    --shadow: 0 1px 2px rgba(20,25,50,.04), 0 8px 24px -12px rgba(20,25,50,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1120; --surface:#121a2c; --surface-2:#161f36;
+      --text:#e7ebf5; --muted:#93a0bd; --border:#26314c;
+      --accent:#7c9dff; --accent-soft:#1c2748;
+      --accent-2:#4fdcc4; --accent-2-soft:#0f2e2a;
+      --warn:#f0b45e; --warn-soft:#33260f;
+      --danger:#ff8a80; --danger-soft:#3a1512;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1120; --surface:#121a2c; --surface-2:#161f36;
+    --text:#e7ebf5; --muted:#93a0bd; --border:#26314c;
+    --accent:#7c9dff; --accent-soft:#1c2748;
+    --accent-2:#4fdcc4; --accent-2-soft:#0f2e2a;
+    --warn:#f0b45e; --warn-soft:#33260f;
+    --danger:#ff8a80; --danger-soft:#3a1512;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic UI','Meiryo',system-ui,sans-serif;
+    line-height:1.75; padding-inline:16px; padding-block:40px 80px;
+  }
+  .page{max-width:900px;margin-inline:auto;}
+  code,.mono{font-family:'JetBrains Mono','Consolas','Courier New',monospace;}
+
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:600;}
+  h1{font-size:clamp(24px,5vw,34px);line-height:1.35;margin:10px 0 6px;text-wrap:balance;}
+  .lede{color:var(--muted);font-size:15.5px;max-width:62ch;margin:0 0 18px;}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:8px 18px;
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--muted);
+    border-top:1px solid var(--border);padding-block:14px 0;margin-bottom:28px;
+  }
+  .meta b{color:var(--text);font-weight:500;}
+
+  h2{font-size:20px;display:flex;align-items:baseline;gap:10px;margin:56px 0 6px;scroll-margin-top:16px;}
+  h2 .num{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:5px;flex:none;}
+  h2 + .section-lede{color:var(--muted);font-size:14.5px;margin:0 0 18px;max-width:66ch;}
+  h3{font-size:15px;margin:28px 0 10px;}
+
+  nav.toc{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow);}
+  nav.toc h2{font-size:14px;margin:0 0 8px;}
+  nav.toc ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px;font-size:14px;}
+  nav.toc a{color:var(--accent);text-decoration:none;}
+  nav.toc a:hover{text-decoration:underline;}
+
+  .dep{display:flex;flex-direction:column;gap:0;margin-top:16px;}
+  .dep-row{
+    display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;box-shadow:var(--shadow);
+  }
+  .dep-arrow{align-self:center;color:var(--muted);font-size:18px;line-height:1;padding:6px 0;}
+  .dep-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent);border-radius:5px;padding:2px 7px;flex:none;height:fit-content;}
+  .dep-body{flex:1 1 260px;min-width:0;}
+  .dep-title{font-weight:700;font-size:14.5px;}
+  .dep-note{color:var(--muted);font-size:13px;}
+  .dep-par{border-color:var(--accent-2);}
+  .dep-par .dep-tag{background:var(--accent-2-soft);color:var(--accent-2);}
+
+  .callout{border:1px solid var(--warn);background:var(--warn-soft);border-radius:10px;padding:12px 14px;font-size:14px;margin:16px 0;}
+  .callout b{color:var(--warn);}
+  .callout.danger{border-color:var(--danger);background:var(--danger-soft);}
+  .callout.danger b{color:var(--danger);}
+  .callout.info{border-color:var(--accent-2);background:var(--accent-2-soft);}
+  .callout.info b{color:var(--accent-2);}
+  .callout p{margin:6px 0 0;}
+  .callout p:first-child{margin-top:0;}
+  .callout ul,.callout ol{margin:6px 0 0;padding-left:20px;}
+  .callout li{margin-bottom:6px;}
+
+  .silent{display:flex;flex-direction:column;gap:12px;}
+  .silent-item{border:1px solid var(--danger);background:var(--danger-soft);border-radius:10px;padding:12px 14px;}
+  .silent-item h4{margin:0 0 6px;font-size:14.5px;color:var(--danger);display:flex;gap:8px;align-items:baseline;}
+  .silent-item h4 .n{font-family:'JetBrains Mono',monospace;font-size:12px;flex:none;}
+  .silent-item p{margin:0 0 6px;font-size:13.8px;}
+  .silent-item p:last-child{margin-bottom:0;}
+  .silent-item .fix{color:var(--text);font-weight:500;}
+
+  .badge{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;border-radius:4px;padding:1px 6px;white-space:nowrap;flex:none;border:1px solid currentColor;}
+  .b-ok{color:var(--accent-2);}
+  .b-tbd{color:var(--warn);}
+  .b-self{color:var(--accent-2);}
+  .b-admin{color:var(--danger);}
+
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden;scroll-margin-top:16px;}
+  .step-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;cursor:pointer;background:var(--surface-2);}
+  .step-head input{width:17px;height:17px;flex:none;accent-color:var(--accent-2);cursor:pointer;}
+  .step-no{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--accent);flex:none;}
+  .step-title{font-weight:700;font-size:14.5px;flex:1 1 auto;min-width:0;}
+  .step.done .step-title{text-decoration:line-through;color:var(--muted);}
+  .step.done{opacity:.62;}
+  .step.blocked{border-color:var(--danger);}
+
+  dl.step-body{margin:0;padding:12px 14px;display:grid;grid-template-columns:82px 1fr;gap:4px 12px;font-size:14px;}
+  dl.step-body dt{font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--muted);padding-top:4px;letter-spacing:.03em;}
+  dl.step-body dd{margin:0 0 6px;min-width:0;}
+  dl.step-body dd:last-child{margin-bottom:0;}
+  dl.step-body ol,dl.step-body ul{margin:0;padding-left:20px;}
+  dl.step-body li{margin-bottom:4px;}
+  dl.step-body code{font-size:12.3px;background:var(--surface-2);padding:1px 5px;border-radius:4px;word-break:break-all;}
+  .path{font-family:'JetBrains Mono',monospace;font-size:12.5px;background:var(--surface-2);padding:2px 6px;border-radius:4px;display:inline-block;}
+  @media (max-width:560px){
+    dl.step-body{grid-template-columns:1fr;gap:2px;}
+    dl.step-body dt{padding-top:8px;}
+  }
+
+  pre{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;margin:6px 0;}
+  .mailtpl{
+    background:var(--surface);border:1px solid var(--accent);border-radius:10px;
+    padding:14px 16px;margin-top:14px;
+  }
+  .mailtpl h4{margin:0 0 8px;font-size:14px;color:var(--accent);}
+  .mailtpl pre{background:var(--surface-2);white-space:pre-wrap;word-break:break-word;font-size:12.8px;line-height:1.75;}
+
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 8px;box-shadow:var(--shadow);overflow-x:auto;margin-top:12px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-family:'JetBrains Mono',monospace;font-weight:500;font-size:11px;letter-spacing:.04em;color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;}
+  td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  table code{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px;word-break:break-all;}
+  tr.must-differ td{background:var(--warn-soft);}
+  tr.must-differ td:first-child{font-weight:700;}
+  .yes{color:var(--accent-2);font-weight:700;}
+  .no{color:var(--muted);}
+
+  .progress{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0 10px;margin-bottom:-4px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);}
+  .bar{height:5px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-top:5px;}
+  .bar span{display:block;height:100%;width:0;background:var(--accent-2);transition:width .2s;}
+
+  footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--border);font-size:12.5px;color:var(--muted);}
+  a{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="eyebrow">ROLLOUT GUIDE — ORIGINAL TENANT</div>
+  <h1>元テナントへの反映 手順書</h1>
+  <p class="lede">新テナントで検証し終えた構成を、元のテナントへ<b>追加</b>するための差分手順。作り直しではないので、<b>既存の凍結デモ（agent-search-hosted）を壊さないこと</b>が最優先になる。</p>
+  <div class="meta">
+    <span>前提: <b>Global Administrator ではない</b></span>
+    <span>前提: <b>Fabric 管理者ではない</b></span>
+    <span>凡例: <span class="badge b-self">自分で可</span> <span class="badge b-admin">管理者待ち</span></span>
+  </div>
+
+  <div class="progress">
+    進捗 <b id="pcount">0 / 0</b>
+    <div class="bar"><span id="pbar"></span></div>
+  </div>
+
+  <!-- ================= 0 ================= -->
+  <h2 id="s0"><span class="num">0</span>この手順書の使い方</h2>
+
+  <div class="callout info">
+    <b>休み明け初日の動き方</b>
+    <ol>
+      <li><b>まず <a href="#s1">1. 管理者への依頼</a> を送る。</b>管理者権限が必要な項目はリードタイムが読めないので、何よりも先に投げる。依頼文のテンプレートをそのまま使える。</li>
+      <li>返事を待っている間に <a href="#s3">3.</a> 以降を進める。<span class="badge b-self">自分で可</span> のバッジが付いた手順は、管理者の完了を待たずに全部やれる。</li>
+      <li><span class="badge b-admin">管理者待ち</span> の手順に行き当たったら飛ばして、次の <span class="badge b-self">自分で可</span> に進む。</li>
+      <li>管理者から完了連絡が来たら、飛ばした手順に戻る。</li>
+    </ol>
+    <p>結果として、<b>管理者の返事が来る頃にはデータとレイクハウスが出来上がっている</b>状態になる。</p>
+  </div>
+
+  <nav class="toc">
+    <h2>目次</h2>
+    <ol start="0">
+      <li><a href="#s0">この手順書の使い方</a></li>
+      <li><a href="#s1">管理者への依頼（最初に送る）</a></li>
+      <li><a href="#s2">【最重要】既存デモを壊さないための注意</a></li>
+      <li><a href="#s3">持ってくるもの／作り直すもの／既存を流用</a></li>
+      <li><a href="#s4">追加作業の手順（差分のみ）</a></li>
+      <li><a href="#s5">環境変数の対応表（元テナント版）</a></li>
+      <li><a href="#s6">反映後の動作確認</a></li>
+    </ol>
+  </nav>
+
+  <h3>元テナントの前提（新テナントとの違い）</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>観点</th><th>新テナント</th><th>元テナント</th></tr></thead>
+      <tbody>
+        <tr><td>自分の権限</td><td>Global Administrator</td><td><b>Global Administrator でも Fabric 管理者でもない。</b>管理者同意・テナント設定は依頼が必要でリードタイムが読めない</td></tr>
+        <tr><td>OBO 用アプリ登録</td><td>新規に作る</td><td>既存デモ用のものが<b>すでにある（触らない）</b>。新エージェント用に別に作る</td></tr>
+        <tr><td>品質チームグループ</td><td>新規に作る</td><td><b>すでにある（流用する）</b></td></tr>
+        <tr><td>全社員グループ</td><td>新規に作る</td><td>実グループとしては<b>無い可能性が高い</b>（旧環境ではスラッグのままだった）。新規作成の依頼が要る</td></tr>
+        <tr><td>AI Search インデックス</td><td>新規に作る</td><td>既存デモが使っているものがある（品質チームのグループIDで ACL 済み）。<b>共有せず別名で新規作成する</b></td></tr>
+        <tr><td>Foundry プロジェクト</td><td>新規に作る</td><td><b>すでにある（流用する）</b></td></tr>
+        <tr><td>既存エージェント</td><td>無い</td><td><code>agent-search-hosted</code> が<b>凍結・デモで使用中。壊してはいけない</b></td></tr>
+        <tr><td>Fabric</td><td>ワークスペースから作る</td><td>ワークスペースとインポートモードのセマンティックモデルがある。<b>インポートモードなのでオントロジーにデータをバインドできない</b>（レイクハウス＋Direct Lake を新規に作る）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>依存関係</h3>
+  <div class="dep">
+    <div class="dep-row"><span class="dep-tag">1</span><div class="dep-body"><div class="dep-title">管理者への依頼を送る</div><div class="dep-note">テナント設定・アプリ登録の管理者同意・ロール割り当て。ここが返るまで 4-5 / 4-6 / 4-7 に進めない。</div></div></div>
+    <div class="dep-arrow">▼ 待っている間に並行 ▼</div>
+    <div class="dep-row dep-par"><span class="dep-tag">4-1〜4-4</span><div class="dep-body"><div class="dep-title">レイクハウス → Delta テーブル → Direct Lake モデル ／ 新インデックス作成・文書投入 ／ azd 環境の分離</div><div class="dep-note">すべて自分だけで進められる。全社員グループIDだけは依頼の結果待ち（暫定で既存の品質チームIDのみで先に投入し、後で入れ替えることもできる）。</div></div></div>
+    <div class="dep-arrow">▼ 管理者の完了後 ▼</div>
+    <div class="dep-row"><span class="dep-tag">4-5〜4-8</span><div class="dep-body"><div class="dep-title">オントロジー作成・バインド → Fabric IQ 接続 → Toolbox → azd deploy</div><div class="dep-note">Ontology テナント設定とアプリ登録②の管理者同意が前提。</div></div></div>
+    <div class="dep-arrow">▼</div>
+    <div class="dep-row"><span class="dep-tag">6</span><div class="dep-body"><div class="dep-title">新エージェントの2人比較 ＋ <b>既存エージェントの回帰確認</b></div><div class="dep-note">既存デモが以前と同じ答えを返すことまで見て、はじめて完了。</div></div></div>
+  </div>
+
+  <!-- ================= 1 ================= -->
+  <h2 id="s1"><span class="num">1</span>管理者への依頼（最初に送る）</h2>
+  <p class="section-lede">管理者権限が必要な項目だけを抜き出した。休み明け初日の朝いちばんに送る。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>依頼内容</th><th>必要な権限</th><th>これが無いと止まる手順</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Fabric テナント設定 <b>Ontology item (preview)</b> の有効化</td><td>Fabric 管理者</td><td><a href="#s4-5">4-5</a></td></tr>
+        <tr><td>2</td><td>Fabric テナント設定 <b>データエージェント関連</b>の有効化</td><td>Fabric 管理者</td><td><a href="#s4-5">4-5</a></td></tr>
+        <tr><td>3</td><td><b>全社員セキュリティグループ</b>の新規作成（または既存の全社員グループの Object ID の提供）</td><td>Entra ID 管理者</td><td><a href="#s4-3">4-3</a></td></tr>
+        <tr><td>4</td><td><b>新規アプリ登録①（OBO 用）</b>の作成と、Graph <code>GroupMember.Read.All</code> / Power BI <code>Dataset.Read.All</code> / <code>https://ai.azure.com</code> 向け委任権限の付与＋<b>管理者同意</b></td><td>アプリケーション管理者＋特権ロール管理者（同意）</td><td><a href="#s4-7">4-7</a></td></tr>
+        <tr><td>5</td><td><b>新規アプリ登録②（Fabric IQ 接続用）</b>の作成と、Power BI <code>Item.Execute.All</code> / <code>Item.Read.All</code> の付与＋<b>管理者同意</b>、リダイレクト URI の登録</td><td>同上</td><td><a href="#s4-6">4-6</a></td></tr>
+        <tr><td>6</td><td>Foundry プロジェクトの<b>ロール割り当て</b>：テストユーザー2人に Foundry User 相当、自分に Foundry Project Manager</td><td>該当リソースの所有者／ユーザーアクセス管理者</td><td><a href="#s4-6">4-6</a> / <a href="#s6">6</a></td></tr>
+        <tr><td>7</td><td>Fabric 容量への<b>ワークスペース作成権限</b>（新しいワークスペースを既存容量に割り当てられるか）</td><td>Fabric 容量管理者</td><td><a href="#s4-1">4-1</a></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout danger">
+    <b>依頼に必ず添える一文</b>
+    <p><b>既存のアプリ登録・既存のセマンティックモデル・既存のワークスペースには手を入れないでほしい</b>ことを明記する。「権限を足すだけなら既存アプリでいいのでは」と親切に提案されると、凍結中のデモが壊れる。</p>
+  </div>
+
+  <div class="mailtpl">
+    <h4>そのままコピーして送れる依頼文</h4>
+    <pre>件名: [依頼] Fabric IQ 検証環境の追加設定について（7件）
+
+お疲れさまです。&lt;自分の名前&gt;です。
+
+Fabric のオントロジー（Fabric IQ）を使った検証を進めており、
+管理者権限が必要な設定を 7 件お願いしたく連絡しました。
+
+【前提・お願い】
+既存のデモ環境（エージェント名: agent-search-hosted）は現在も使用中のため、
+今回の作業は**すべて新規のリソースを追加する形**でお願いします。
+既存のアプリ登録・セマンティックモデル・ワークスペースには
+変更を加えないでください（既存デモの挙動が変わる可能性があるため）。
+
+──────────────────────────────
+1) Fabric テナント設定の有効化（2件）
+   画面: Fabric ポータル > 設定(歯車) > 管理ポータル > テナント設定
+   内容: ・「Ontology item (preview)」を有効化
+         ・データエージェント関連の設定を有効化
+   理由: オントロジーおよびデータエージェントをアイテムとして
+         作成できるようにするため。
+   対象を絞る場合は、セキュリティグループ &lt;GROUP_NAME&gt; 限定で構いません。
+
+2) 全社員セキュリティグループ
+   画面: Entra 管理センター > ID > グループ
+   内容: 全社員が所属するセキュリティグループを1つご用意ください。
+         既にあればその**オブジェクトID（GUID）**をお知らせください。
+   理由: 文書のアクセス制御に、文字列ではなく実グループの GUID が必要なため。
+         現状は文字列のままで、権限解決の結果と一致せず
+         文書が表示されない状態になっています。
+
+3) 新規アプリ登録①（ユーザー認証・OBO 用）
+   画面: Entra 管理センター > ID > アプリケーション > アプリの登録 > 新規登録
+   表示名（案）: &lt;APP1_DISPLAY_NAME&gt;
+   設定: ・「パブリック クライアント フローを許可する」を有効
+         ・「API の公開」でスコープ access_as_user を追加
+         ・API のアクセス許可（すべて委任）:
+             Microsoft Graph  … GroupMember.Read.All
+             Power BI Service … Dataset.Read.All
+             https://ai.azure.com 向けの委任権限
+               （「所属する組織で使用している API」タブから追加）
+         ・上記すべてに**管理者の同意**を付与
+         ・クライアントシークレットを1つ発行
+   理由: 利用者本人の権限で各データソースへ問い合わせるため。
+   ※ 既存の OBO 用アプリ登録は変更せず、**新規に作成**してください。
+
+4) 新規アプリ登録②（Fabric IQ 接続用）
+   画面: 同上
+   表示名（案）: &lt;APP2_DISPLAY_NAME&gt;
+   設定: ・API のアクセス許可（委任）:
+             Power BI Service … Item.Execute.All, Item.Read.All
+         ・**管理者の同意**を付与
+         ・クライアントシークレットを1つ発行
+         ・リダイレクト URI は、こちらで Foundry の接続作成画面を開いた際に
+           表示される値を後ほどお伝えしますので、その時点で登録をお願いします。
+   理由: Foundry から Fabric のオントロジーへ接続するため。
+   ※ ①とは別のアプリとして作成してください（権限の切り分けのため）。
+
+5) Foundry プロジェクトのロール割り当て
+   画面: Azure ポータル > &lt;FOUNDRY_PROJECT_NAME&gt; > アクセス制御(IAM)
+   内容: ・&lt;TEST_USER_1&gt;, &lt;TEST_USER_2&gt; に
+           エージェントを呼び出せるロール（Foundry User 相当）
+         ・&lt;自分のアカウント&gt; に Foundry Project Manager
+   理由: 前者が無いと 403、後者が無いと接続が作成できないため。
+
+6) Fabric 容量へのワークスペース割り当て
+   内容: 新しいワークスペース &lt;WORKSPACE_NAME&gt; を作成し、
+         既存の Fabric 容量に割り当てられるようにしてください。
+   理由: Direct Lake のレイクハウスを新規に作るため。
+         既存のワークスペース・セマンティックモデルには変更を加えません。
+──────────────────────────────
+
+【完了時にお知らせいただきたいもの】
+・1) 6) … 「完了」の一言
+・2)    … グループの**オブジェクトID（GUID）**
+・3) 4) … 各アプリの**クライアントID（アプリケーションID）**と、
+          **シークレット**（Key Vault 等、安全な経路でお願いします）
+・5)    … 「完了」の一言
+
+お手数をおかけしますが、よろしくお願いいたします。</pre>
+  </div>
+
+  <!-- ================= 2 ================= -->
+  <h2 id="s2"><span class="num">2</span>【最重要】既存デモを壊さないための注意</h2>
+  <p class="section-lede">元テナントには、いま動いている凍結デモがある。以下はどれも「気づかないうちに既存側の挙動が変わる」類の事故。</p>
+
+  <div class="silent">
+    <div class="silent-item">
+      <h4><span class="n">A</span>AI Search のインデックスを既存エージェントと共有している</h4>
+      <p>全社員グループの実グループ化（依頼 #3）に伴って ACL を変えて再投入すると、<b>同じインデックスを見ている凍結中の既存エージェントの挙動も一緒に変わる</b>。何も触っていないはずの既存デモで、突然「閲覧できません」が出るようになる。</p>
+      <p class="fix">→ <b>新エージェント用に別名のインデックスを作る。</b><code>AZURE_SEARCH_INDEX_NAME</code> を<b>新エージェントの azd 環境だけ</b>で変える。既存エージェントの azd 環境には一切触らない。</p>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">B</span>既存の OBO 用アプリ登録を変更しない</h4>
+      <p>「権限を足すだけ」でも、同意状態の変化やスコープの追加が既存デモのサインインに影響する。影響範囲が読めない。</p>
+      <p class="fix">→ <b>新エージェント用に別のアプリ登録を作る</b>（依頼 #4）。既存アプリには触らない。</p>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">C</span>既存のセマンティックモデル・ワークスペースを変更しない</h4>
+      <p>既存のモデルは<b>インポートモード</b>で、オントロジーにデータをバインドできない。ここを Direct Lake に変換しようとすると、既存デモの Power BI 経路（<code>query_fabric_tool</code>）が動かなくなる。</p>
+      <p class="fix">→ <b>レイクハウス・Direct Lake モデル・オントロジーは、すべて新しいアイテムとして作る。</b>既存モデルはそのまま残す。</p>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">D</span>既存エージェントを再デプロイしない</h4>
+      <p>既存エージェントの <span class="path">requirements.txt</span> は <code>&gt;=</code> 指定で、<span class="path">azure.yaml</span> が <code>remote_build</code>。<b>次に再デプロイした瞬間に未検証の最新パッケージが入る。</b>コードを1行も変えていなくても挙動が変わりうる。</p>
+      <p class="fix">→ <b>既存エージェントには <code>azd deploy</code> を打たない。</b>どうしても必要になったら、先にバージョンを固定してから。</p>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">E</span>azd の環境を取り違えると既存デモの全員が再サインインになる</h4>
+      <p>既存環境に誤ってデプロイすると、既存エージェントの <code>_OBO_CACHE</code>（プロセス内メモリ）が消える。</p>
+      <p class="fix">→ <b>新エージェント用の azd 環境を分け、<code>azd deploy</code> の前に必ず <code>azd env list</code> を打つ。</b></p>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">F</span>テナントを取り違える</h4>
+      <p>新テナントと元テナントの両方に <code>az login</code> できる状態で作業する。</p>
+      <p class="fix">→ <b>作業前に必ず <code>az account show</code> でテナントを確認する。</b>新テナント側で使った tenant_guard の期待値を、元テナントのIDに入れ替えて使う。</p>
+      <pre>az account show --query "{tenant:tenantId, sub:name, user:user.name}" -o table
+azd env list</pre>
+    </div>
+  </div>
+
+  <!-- ================= 3 ================= -->
+  <h2 id="s3"><span class="num">3</span>持ってくるもの／作り直すもの／既存を流用</h2>
+  <p class="section-lede">新テナントでの成果のうち、何がそのまま使えて、何が作り直しになるか。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>項目</th><th>持ってくる</th><th>作り直す</th><th>既存を流用</th><th>注意</th></tr></thead>
+      <tbody>
+        <tr><td>PySpark ノートブック <span class="path">fabric_notebooks/01_create_delta_tables.py</span></td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>そのまま使える。テーブル名・列名の制約は新テナントで検証済み。末尾の自動チェックもそのまま効く</td></tr>
+        <tr><td>セマンティックモデルの定義 <span class="path">fabric_notebooks/02_create_semantic_model.py</span></td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td><b>環境変数を差し替えて実行するだけ</b>で同じモデルが再現できる（TMSL をコードで持っているため）。ポータルで手作業すると写し間違いが起きる</td></tr>
+        <tr><td><span class="path">fabric_schema.py</span>（メジャー・列の Allowlist）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>01 / 02 をそのまま流すなら<b>無変更で済む</b>（3ファイルで名前が揃っているため）。元テナントの既存モデルに合わせる場合のみ書き直しが必要</td></tr>
+        <tr><td>オントロジーの定義（エンティティ・リレーション・バインド）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td><b>API で書ける</b>（定義スキーマが公開されている）。アイテム自体は新規作成になるが、定義はスクリプトで流し込める。<br><b>バインド先の <code>workspaceId</code> / <code>itemId</code> は元テナントの値に差し替える</b>（新テナントのレイクハウスを指したままにしない）</td></tr>
+        <tr><td><code>AGENT_INSTRUCTIONS</code>（<span class="path">main.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>コード変更なし</td></tr>
+        <tr><td>デモUI（<span class="path">demo_chat_iq.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>環境変数だけ差し替える</td></tr>
+        <tr><td>確認する質問セット・期待結果</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>データが同じなら期待結果も同じ</td></tr>
+        <tr class="must-differ"><td>アプリ登録①②</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td><b>既存アプリを流用しない</b>（§2 B）</td></tr>
+        <tr class="must-differ"><td>グループID・クライアントID・シークレット</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td>テナントが違えば GUID も違う</td></tr>
+        <tr class="must-differ"><td>Fabric IQ 接続ID・Toolbox</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td>プロジェクトごとに作る</td></tr>
+        <tr class="must-differ"><td>AI Search インデックス</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td><b>既存と別名で作る</b>（§2 A）</td></tr>
+        <tr class="must-differ"><td>レイクハウス・Direct Lake モデル・オントロジー</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td><b>新しいアイテムとして作る</b>（§2 C）</td></tr>
+        <tr class="must-differ"><td>azd 環境・エージェント名</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td><b>既存と必ず別名</b>（§2 D/E）</td></tr>
+        <tr><td>Foundry プロジェクト</td><td class="no">—</td><td class="no">—</td><td class="yes">✔</td><td>既存プロジェクトの中に<b>別エージェント</b>として追加する。ロール割り当ては依頼 #6</td></tr>
+        <tr><td>品質チームのグループ</td><td class="no">—</td><td class="no">—</td><td class="yes">✔</td><td>既存のものを使う。<b>メンバー構成を変えない</b>（既存インデックスの ACL と対応しているため）</td></tr>
+        <tr><td>Fabric 容量</td><td class="no">—</td><td class="no">—</td><td class="yes">✔</td><td>新しいワークスペースを既存容量に割り当てる（依頼 #7）。容量を食うので既存の負荷に注意</td></tr>
+        <tr><td>Azure AI Search サービス本体</td><td class="no">—</td><td class="no">—</td><td class="yes">✔</td><td>サービスは流用、<b>インデックスだけ新規</b>。SKU のインデックス数上限に注意</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 4 ================= -->
+  <h2 id="s4"><span class="num">4</span>追加作業の手順（差分のみ）</h2>
+  <p class="section-lede">新テナントで実際に行った順を基本に、既存環境と重なる部分を省いた差分だけを並べた。各手順に、新テナント手順書の該当箇所へのリンクを付けてある。</p>
+
+  <div class="step" id="s4-1">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-1</span><span class="step-title">新しいワークスペースとレイクハウスを作る</span><span class="badge b-admin">管理者待ち</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>既存のワークスペース・モデルに触れずに、Direct Lake の置き場所を用意する。</dd>
+      <dt>どこで</dt><dd>Fabric ポータル <span class="path">ワークスペース &gt; 新規</span> → <span class="path">新規 &gt; レイクハウス</span></dd>
+      <dt>手順</dt><dd><ol>
+        <li>新しいワークスペースを作り、既存の Fabric 容量に割り当てる（依頼 #7 の完了が要る）。</li>
+        <li>レイクハウスを作る。<b>OneLake セキュリティは有効にしない。</b></li>
+        <li>ワークスペースに、テストユーザー2人（または品質チーム／全社員グループ）を必要な範囲で追加する。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>新しいワークスペースが容量に紐づいて表示され、レイクハウスが開ける。既存ワークスペースは何も変わっていない。</dd>
+      <dt>落とし穴</dt><dd>既存ワークスペースの中にレイクハウスを作ると、既存デモの管理範囲と混ざって事故のもとになる。<b>ワークスペースごと分ける。</b><br>参考: <a href="new_tenant_setup.html#s4-1">新テナント手順書 4-1</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-2">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-2</span><span class="step-title">PySpark で Delta マネージドテーブルを作る</span><span class="badge b-self">自分で可</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>新テナントで検証済みのテーブル定義を、そのまま元テナントに再現する。</dd>
+      <dt>どこで</dt><dd>Fabric ポータル、4-1 のレイクハウスのノートブック</dd>
+      <dt>手順</dt><dd><ol>
+        <li>新テナントで使ったノートブックをそのまま持ってきて実行する。</li>
+        <li>閲覧範囲ごとに分けたテーブル（公開／品質チーム限定）をそのまま作る。</li>
+        <li>4-6 の判定結果次第だが、権限確認用の混合テーブルは<b>元テナントでは作らなくてよい</b>（新テナントで判定済みのはず。未判定なら作る）。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>テーブルが並び、数値列が Double で、プレビューに値が出る。</dd>
+      <dt>落とし穴</dt><dd>実データを載せる場合、新テナントの合成データとは中身が違う。<b>列名・型の制約（snake_case / Double / 列マッピング無効 / マネージドテーブル）は実データでも必ず守る。</b><br>参考: <a href="new_tenant_setup.html#s4-1">新テナント手順書 4-1</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-3">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-3</span><span class="step-title">新しい AI Search インデックスを作り、文書を投入する</span><span class="badge b-self">自分で可</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>既存インデックスに触れずに、新エージェント用の ACL 済みインデックスを用意する。</dd>
+      <dt>どこで</dt><dd>手元の PC。既存の AI Search サービス（インデックスだけ新規）</dd>
+      <dt>手順</dt><dd><ol>
+        <li><code>AZURE_SEARCH_INDEX_NAME</code> に<b>既存と違う名前</b>を設定する（例: 既存の名前に <code>-iq</code> を足す）。</li>
+        <li><code>QUALITY_TEAM_GROUP_ID</code> に<b>既存の品質チームグループの GUID</b> を設定する（流用）。</li>
+        <li><code>ALL_EMPLOYEES_GROUP_ID</code> に、依頼 #3 で得た全社員グループの GUID を設定する。<b>まだ来ていなければ、この手順だけ後回しにする</b>か、暫定で投入しておいて GUID が来たら再投入する。</li>
+        <li>インデックスを作成し、文書を投入する。</li>
+        <li>入った <code>acl_groups</code> が GUID になっていることを1件取り出して確認する。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd><code>python search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で返り、<code>&lt;全社員のGUID&gt;</code> では 0 件。<br><b>既存インデックスの文書数・内容が変わっていないこと</b>も Azure ポータルで確認する。</dd>
+      <dt>落とし穴</dt><dd><b>既存インデックス名を打ち間違えて上書き投入すると、凍結デモが壊れる。</b>投入前に <code>AZURE_SEARCH_INDEX_NAME</code> の値を目視する。<br>ALL_EMPLOYEES_GROUP_ID を変えたら<b>再投入が必要</b>（acl_groups は投入時点の値を焼き付ける）。<br>参考: <a href="new_tenant_setup.html#s4-5">新テナント手順書 4-5</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-4">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-4</span><span class="step-title">azd 環境を新エージェント用に分ける</span><span class="badge b-self">自分で可</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>既存エージェントの azd 環境と完全に切り離す。</dd>
+      <dt>どこで</dt><dd>リポジトリ直下のターミナル、<span class="path">azure.yaml</span></dd>
+      <dt>手順</dt><dd><pre>az login --tenant &lt;ORIGINAL_TENANT_ID&gt;
+az account show --query tenantId -o tsv   # ★元テナントであることを確認
+azd env new &lt;新エージェント用の環境名&gt;
+azd env list                               # ★選択中(*)を確認</pre>
+      <span class="path">azure.yaml</span> のエージェント名（<code>name:</code> と <code>services:</code> のキー、<code>container</code> 下の <code>name:</code>）を、<b>既存の <code>agent-search-hosted</code> と衝突しない新しい名前</b>に変える。<code>IQ_AGENT_NAME</code> も同じ名前に合わせる。</dd>
+      <dt>確認方法</dt><dd><code>azd env list</code> に新しい環境が現れ、<code>*</code> が付いている。既存環境の値は変わっていない（<code>azd env select</code> で切り替えて <code>azd env get-values</code> で確認）。</dd>
+      <dt>落とし穴</dt><dd>エージェント名は YAML のキー名なので環境変数にできない。<b>手で変える。</b>変え忘れると、デプロイ時に既存エージェントを上書きする可能性がある。<br>参考: <a href="new_tenant_setup.html#s5-1">新テナント手順書 5-1 / 5-2</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-5">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-5</span><span class="step-title">Direct Lake モデルとオントロジーを作り、バインドしてリフレッシュする</span><span class="badge b-admin">管理者待ち</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>Fabric IQ が実データ付きで答えられる状態にする。</dd>
+      <dt>どこで</dt><dd>Fabric ポータル、4-1 のワークスペース</dd>
+      <dt>手順</dt><dd><ol>
+        <li>依頼 #1 の <b>Ontology item (preview)</b> が有効になっていることを確認する。</li>
+        <li>4-1 のレイクハウスから「新しいセマンティックモデル」で Direct Lake モデルを作る。</li>
+        <li>オントロジーを作り、静的バインド／時系列バインドを設定する。</li>
+        <li><b>リフレッシュする。</b></li>
+        <li>ワークスペースIDとオントロジーのアイテムIDを控える。</li>
+        <li>オントロジーと裏のソースへの読み取り権限を、テストユーザー2人に付与する。閲覧範囲を分けたテーブルは、限定側には品質チームグループだけを付与する。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>オントロジーのプレビューに実データが値付きで出る。モデルのストレージモードが「Direct Lake」。</dd>
+      <dt>落とし穴</dt><dd><b>既存のインポートモードのセマンティックモデルを使わない。</b>定義は作れるがデータが紐づかず、Fabric IQ が中身のある回答を返せない。<br>参考: <a href="new_tenant_setup.html#s4-2">新テナント手順書 4-2 / 4-3 / 4-4</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-6">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-6</span><span class="step-title">Fabric IQ 接続を作り、Toolbox を作成する</span><span class="badge b-admin">管理者待ち</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>既存の Foundry プロジェクトの中に、新エージェント用の Fabric IQ 経路を作る。</dd>
+      <dt>どこで</dt><dd>Foundry ポータル <span class="path">Settings &gt; Connections &gt; New connection &gt; Fabric IQ</span>、<span class="path">setup_toolbox.py</span></dd>
+      <dt>手順</dt><dd><ol>
+        <li>依頼 #5 のアプリ登録②のクライアントID・シークレットを受け取る。</li>
+        <li>接続を作り、表示されたリダイレクト URI を管理者に伝えてアプリ登録②に追加してもらう（依頼 #5 の後半。ここで一度往復が発生する）。</li>
+        <li>接続IDを控える。</li>
+        <li><code>FABRIC_IQ_TOOLBOX_NAME</code> を<b>既存と混ざらない名前</b>にして <code>python setup_toolbox.py</code> を実行する。</li>
+        <li>出力された MCP エンドポイントを控える。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>接続一覧に新しい接続が並び、Toolbox の MCP エンドポイントが表示される。</dd>
+      <dt>落とし穴</dt><dd>リダイレクト URI の登録で管理者との往復が1回入る。<b>依頼を送る時点で「後から URI をお伝えします」と予告しておく</b>と、待ち時間が減る。<br>接続を作るには自分に Foundry Project Manager が要る（依頼 #6）。<br>参考: <a href="new_tenant_setup.html#s5-3">新テナント手順書 5-3 / 5-4</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-7">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-7</span><span class="step-title">環境変数を登録して、新エージェントをデプロイする</span><span class="badge b-admin">管理者待ち</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>新エージェントを既存プロジェクトの中に追加する。</dd>
+      <dt>どこで</dt><dd>リポジトリ直下のターミナル</dd>
+      <dt>手順</dt><dd><ol>
+        <li>依頼 #4 のアプリ登録①のクライアントID・シークレットを受け取る。</li>
+        <li>§5 の対応表に沿って <code>azd env set</code> をすべて実行する。</li>
+        <li><b><code>azd env list</code> で選択中の環境を確認する。</b></li>
+        <li><code>azd deploy</code>。</li>
+        <li>起動ログに <code>FABRIC_IQ_TOOLBOX_ENDPOINT が未設定</code> の警告が出ていないことを確認する。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>Foundry のエージェント一覧に、<b>既存エージェントと新エージェントの両方</b>が並んでいる。既存エージェントの最終更新日時が<b>変わっていない</b>。</dd>
+      <dt>落とし穴</dt><dd><b>ここが一番の事故ポイント。</b>環境を取り違えて <code>azd deploy</code> すると、既存エージェントが上書きされ、<code>_OBO_CACHE</code> が消えて既存デモの全員が再サインインになる（§2 D/E）。打つ直前に必ず <code>azd env list</code>。<br>参考: <a href="new_tenant_setup.html#s5-5">新テナント手順書 5-5</a></dd>
+    </dl>
+  </div>
+
+  <!-- ================= 5 ================= -->
+  <h2 id="s5"><span class="num">5</span>環境変数の対応表（元テナント版）</h2>
+  <p class="section-lede">黄色い行は<b>既存エージェントと必ず別の値にしなければいけない</b>もの。ここを同じにすると既存デモが壊れる。値そのものは書かない。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>変数名</th><th>新エージェントでの値の出どころ</th><th>既存エージェントとの関係</th></tr></thead>
+      <tbody>
+        <tr class="must-differ"><td><code>AZURE_SEARCH_INDEX_NAME</code></td><td>4-3 で自分が決める新しい名前</td><td><b>必ず別の値。</b>同じにすると ACL 変更が既存デモに波及する（§2 A）</td></tr>
+        <tr class="must-differ"><td><code>OBO_CLIENT_ID</code></td><td>依頼 #4 の新規アプリ登録①</td><td><b>必ず別の値。</b>既存アプリを流用しない（§2 B）</td></tr>
+        <tr class="must-differ"><td><code>OBO_CLIENT_SECRET</code></td><td>同上</td><td><b>必ず別の値</b></td></tr>
+        <tr class="must-differ"><td><code>OBO_APP_SCOPE</code></td><td><code>api://&lt;新しい OBO_CLIENT_ID&gt;/.default</code></td><td><b>必ず別の値</b></td></tr>
+        <tr class="must-differ"><td><code>IQ_AGENT_NAME</code></td><td>4-4 で決めた新しいエージェント名</td><td><b>必ず別の値。</b><span class="path">azure.yaml</span> と一致させる</td></tr>
+        <tr class="must-differ"><td><code>AGENT_DISPLAY_NAME</code></td><td>自分で決める</td><td><b>別の値にする</b>（ログで見分けるため）</td></tr>
+        <tr class="must-differ"><td>azd 環境名（変数ではないが同格）</td><td>4-4 で作った環境</td><td><b>必ず別。</b><code>azd deploy</code> の前に毎回確認（§2 E）</td></tr>
+        <tr class="must-differ"><td><code>FABRIC_IQ_TOOLBOX_NAME</code></td><td>4-6 で自分が決める</td><td>既存には無い概念だが、混ざらない名前にする</td></tr>
+        <tr><td><code>ALL_EMPLOYEES_GROUP_ID</code></td><td>依頼 #3 で得る全社員グループの GUID</td><td>既存エージェントは<b>この変数を持っていない</b>（スラッグのままだった）。新エージェントだけに設定する</td></tr>
+        <tr><td><code>QUALITY_TEAM_GROUP_ID</code></td><td>既存の品質チームグループの GUID</td><td><b>既存と同じ値でよい</b>（グループを流用するため）</td></tr>
+        <tr><td><code>CURRENT_USER_GROUPS</code></td><td>全社員グループの GUID</td><td>新エージェントだけに設定する</td></tr>
+        <tr><td><code>OBO_TENANT_ID</code></td><td>元テナントのID</td><td>既存と同じ値</td></tr>
+        <tr><td><code>AZURE_SEARCH_ENDPOINT</code> / <code>AZURE_SEARCH_API_KEY</code></td><td>既存の AI Search サービス</td><td>既存と同じ値（サービスは流用、インデックスだけ別）</td></tr>
+        <tr><td><code>AZURE_OPENAI_*</code></td><td>既存の埋め込みモデル</td><td>既存と同じ値</td></tr>
+        <tr><td><code>AI_FOUNDRY_PROJECT_ENDPOINT</code> / <code>AI_FOUNDRY_MODEL</code></td><td>既存の Foundry プロジェクト</td><td>既存と同じ値（プロジェクトを流用）</td></tr>
+        <tr><td><code>FABRIC_WORKSPACE_ID</code> / <code>FABRIC_DATASET_ID</code></td><td>4-5 で作った新しいワークスペース／Direct Lake モデル</td><td><b>別の値。</b>既存のインポートモードのモデルではない</td></tr>
+        <tr><td><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code></td><td>4-6 の <span class="path">setup_toolbox.py</span> の出力</td><td>既存には無い</td></tr>
+        <tr><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td><td>4-6 の接続</td><td>既存には無い</td></tr>
+        <tr><td><code>FABRIC_IQ_ONTOLOGY_WORKSPACE_ID</code> / <code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code></td><td>4-5 のオントロジーの URL</td><td>既存には無い</td></tr>
+        <tr><td><code>FOUNDRY_CALL_AS</code></td><td><code>user</code> のまま</td><td>既存には無い。<b>変えない</b></td></tr>
+        <tr><td><code>IQ_AGENT_ENDPOINT_BASE</code></td><td>省略可（<code>IQ_AGENT_NAME</code> から組み立て）</td><td>指定するなら<b>新エージェントの名前</b>が入っていることを確認</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= 6 ================= -->
+  <h2 id="s6"><span class="num">6</span>反映後の動作確認</h2>
+  <p class="section-lede">新エージェントが期待どおりに動くことと、<b>既存エージェントが何も変わっていないこと</b>の両方を見る。後者を飛ばさない。</p>
+
+  <div class="step" id="s6-1">
+    <label class="step-head"><input type="checkbox"><span class="step-no">6-1</span><span class="step-title">新エージェントで2人の比較が期待どおりになること</span><span class="badge b-self">自分で可</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>権限差のデモが元テナントでも成立していることを確認する。</dd>
+      <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_chat_iq.py</code>（新エージェント用の <span class="path">.env</span>）</dd>
+      <dt>手順</dt><dd><ol>
+        <li>2つのブラウザ（通常＋シークレット）で、品質チーム所属／未所属の2人としてサインインする。</li>
+        <li>各ユーザーで一度質問し、Fabric IQ の同意リンクを踏んでおく。</li>
+        <li>新テナントで使った3問を左右で送り、結果を比べる。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>
+        <div class="table-wrap" style="margin-top:4px;">
+          <table>
+            <thead><tr><th>質問</th><th>所属</th><th>未所属</th></tr></thead>
+            <tbody>
+              <tr><td>品質文書の単独質問</td><td>内容が返る</td><td>「閲覧可能な情報からは回答できません」</td></tr>
+              <tr><td>売上の単独質問</td><td>数値が返る</td><td>同じ結果</td></tr>
+              <tr><td>横断質問</td><td>3経路を統合</td><td>売上は返り、品質部分が欠けていることを明示</td></tr>
+            </tbody>
+          </table>
+        </div>
+        画面の「実行ユーザー」が左右で違っている。
+      </dd>
+      <dt>落とし穴</dt><dd>左右で差が出ない場合は <code>FOUNDRY_CALL_AS</code> を確認する。<br>参考: <a href="new_tenant_setup.html#s7-3">新テナント手順書 7-3 / 7-4</a></dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s6-2">
+    <label class="step-head"><input type="checkbox"><span class="step-no">6-2</span><span class="step-title">既存エージェント（agent-search-hosted）の挙動が変わっていないこと</span><span class="badge b-self">自分で可</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>今回の追加作業が、凍結中のデモに一切影響していないことを確かめる。</dd>
+      <dt>どこで</dt><dd>既存のデモUI（<span class="path">demo_chat.py</span> / <span class="path">demo_chat_simple.py</span>）と既存の <span class="path">.env</span></dd>
+      <dt>手順</dt><dd><ol>
+        <li><b>作業を始める前に</b>、下の3問を既存エージェントに投げて答えを控えておく（これをやっていないと比較できない。理想は休み前に取っておくこと）。</li>
+        <li>4-7 のデプロイ後、同じ3問を同じユーザーで投げ直す。</li>
+        <li>答えを突き合わせる。</li>
+      </ol></dd>
+      <dt>確認方法</dt><dd>
+        <div class="table-wrap" style="margin-top:4px;">
+          <table>
+            <thead><tr><th>#</th><th>確認する質問</th><th>何を見るか</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>製品A008の品質基準について教えて<br><span style="color:var(--muted);font-size:12.5px;">（品質チーム限定文書）</span></td><td>品質チーム所属のユーザーで<b>今までどおり内容が返る</b>。ACL 変更の巻き添えを受けていないか</td></tr>
+              <tr><td>2</td><td>製品A001の品質基準について教えて<br><span style="color:var(--muted);font-size:12.5px;">（全社公開文書）</span></td><td>全社公開文書が<b>今までどおりの見え方</b>をしている。全社員グループの実グループ化の影響が及んでいないか</td></tr>
+              <tr><td>3</td><td>地域別の売上金額を教えて<br><span style="color:var(--muted);font-size:12.5px;">（Power BI 経路）</span></td><td>数値が<b>以前と同じ</b>。既存のセマンティックモデルに変更が入っていないか</td></tr>
+            </tbody>
+          </table>
+        </div>
+        あわせて、Foundry のエージェント一覧で既存エージェントの<b>最終更新日時が変わっていない</b>こと、Azure ポータルで既存インデックスの<b>文書数が変わっていない</b>ことを確認する。
+      </dd>
+      <dt>落とし穴</dt><dd><b>事前の答えを控えていないと「変わったかどうか」が判定できない。</b>この確認だけは作業前の記録が要る。<br>既存エージェントには<b>絶対に <code>azd deploy</code> を打たない</b>。確認は質問を投げるだけで行う（§2 D）。<br>2 で見え方が変わっていたら、4-3 で既存インデックスに投入してしまった可能性がある。すぐ止めて <code>AZURE_SEARCH_INDEX_NAME</code> を確認する。</dd>
+    </dl>
+  </div>
+
+  <footer>
+    <p>関連: <a href="new_tenant_setup.html">新テナント再構築 手順書</a> ／ <a href="tenant_config_record.md">テナント設定の記録テンプレート</a></p>
+    <p>この手順書は、新テナントでの検証が終わっていることを前提にしているため、<b>独自の【要確認】項目は持たない</b>。仕様上の未確認事項は <a href="new_tenant_setup.html#s8">新テナント手順書の §8（13件）</a> に集約してある。新テナントで解消しきれなかったものがあれば、元テナントでの作業前にそちらを確認する。</p>
+    <p>この手順書に<b>実在の値（テナントID・クライアントID・シークレット・キー・グループID）は書かれていない</b>。依頼文の <code>&lt;...&gt;</code> は送信前に埋める。シークレットはメール本文に書かず、Key Vault 等の安全な経路で受け渡す。</p>
+  </footer>
+
+</div>
+<script>
+(function(){
+  var boxes = document.querySelectorAll('.step-head input[type=checkbox]');
+  var count = document.getElementById('pcount');
+  var bar = document.getElementById('pbar');
+  function update(){
+    var done = 0;
+    boxes.forEach(function(b){
+      b.closest('.step').classList.toggle('done', b.checked);
+      if (b.checked) done++;
+    });
+    count.textContent = done + ' / ' + boxes.length;
+    bar.style.width = (boxes.length ? (done / boxes.length * 100) : 0) + '%';
+  }
+  boxes.forEach(function(b){ b.addEventListener('change', update); });
+  update();
+})();
+</script>
+</body>
+</html>

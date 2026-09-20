@@ -1,7 +1,7 @@
 // agent_search_iq の補助リソース(AI Search / AI Foundryアカウント+プロジェクト+モデルデプロイ / Fabric容量)。
 //
 // azure.yaml は `infra: provider: microsoft.foundry` を使っており、azd はホスト先の
-// Foundryプロジェクト(prjfoundry123)が既に存在する前提で Hosted Agent 自体をデプロイする
+// Foundryプロジェクト(AI_FOUNDRY_PROJECT_ENDPOINT が指す先)が既に存在する前提で Hosted Agent 自体をデプロイする
 // (azd provision の対象ではない)。このBicepはその前提となる土台のリソースを用意するためのもので、
 // `az deployment group create` から単独で実行する。azd の provider は変更しない。
 //
@@ -28,6 +28,9 @@ param location string = resourceGroup().location
   'standard'
 ])
 param searchSku string = 'free'
+
+@description('AI Searchのインデックス名。元テナントへ反映する際は、既存エージェントとインデックスを共有しないよう別名にすること')
+param searchIndexName string = 'poc-documents'
 
 param chatModelName string = 'gpt-4.1-mini'
 param chatModelVersion string = ''
@@ -97,7 +100,7 @@ module fabric 'modules/fabric-capacity.bicep' = if (deployFabricCapacity) {
 //   az search admin-key show --service-name <AZURE_SEARCH_ENDPOINTのホスト名先頭> -g <rg> --query primaryKey -o tsv
 //   az cognitiveservices account keys list --name <accountName> -g <rg> --query key1 -o tsv
 output AZURE_SEARCH_ENDPOINT string = search.outputs.endpoint
-output AZURE_SEARCH_INDEX_NAME string = 'poc-documents'
+output AZURE_SEARCH_INDEX_NAME string = searchIndexName
 
 output AZURE_OPENAI_ENDPOINT string = foundry.outputs.accountEndpoint
 output AZURE_OPENAI_EMBEDDING_DEPLOYMENT string = embeddingModelName

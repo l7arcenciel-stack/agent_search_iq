@@ -28,27 +28,32 @@ Responsesリクエストのbodyに明示的に含めることで、**同一セ�
         python client_test_responses_session.py 06eb5167c268fb230008akIccD3SyEeBQ65VUo1FOkimGneTfs
 
     質問文を省略した場合は「製品A008の品質基準について教えて」を送る。
-    Responsesエンドポイントのベース部分は下の_RESPONSES_URLに固定しているため、
-    別プロジェクト/別エージェントで使う場合はそこを書き換えること
-    （既存コード・既存ファイルへの影響を避けるため、あえて共通化せずこのスクリプト内に
-    直書きしている）。
+    Responsesエンドポイントは環境変数から組み立てる（テナント・プロジェクトを
+    差し替えたときにコード変更が要らないようにするため）:
+      IQ_AGENT_ENDPOINT_BASE          … 指定すればこれをそのまま使う
+      AI_FOUNDRY_PROJECT_ENDPOINT + IQ_AGENT_NAME … 未指定時はこの2つから組み立てる
 
 このスクリプトはclient_register_obo.pyと同じ認証パターン（Entra ID Bearerトークン、
 scope=https://ai.azure.com/.default、DefaultAzureCredential）を使う。トークン値は
 標準出力に一切出力しない。
 """
 import json
+import os
 import sys
 
 import requests
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
+from common import FOUNDRY_PROJECT_ENDPOINT, IQ_AGENT_NAME
+
 _FOUNDRY_INVOKE_SCOPE = "https://ai.azure.com/.default"
 
-_RESPONSES_URL = (
-    "https://prjfoundry123-resource.services.ai.azure.com/api/projects/prjfoundry123"
-    "/agents/agent-search-iq/endpoint/protocols/openai/responses"
-)
+_ENDPOINT_BASE = (
+    os.environ.get("IQ_AGENT_ENDPOINT_BASE")
+    or f"{FOUNDRY_PROJECT_ENDPOINT.rstrip('/')}/agents/{IQ_AGENT_NAME}/endpoint"
+).rstrip("/")
+
+_RESPONSES_URL = f"{_ENDPOINT_BASE}/protocols/openai/responses"
 
 _DEFAULT_QUESTION = "製品A008の品質基準について教えて"
 

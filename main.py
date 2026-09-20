@@ -56,7 +56,7 @@ from agent_framework import (
 from agent_framework.foundry import FoundryChatClient, FoundryToolbox, ResponsesHostServer
 from pydantic import BaseModel
 
-from common import FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, CURRENT_USER_GROUPS
+from common import AGENT_DISPLAY_NAME, FOUNDRY_PROJECT_ENDPOINT, FOUNDRY_MODEL, CURRENT_USER_GROUPS
 from corpus_data import PRODUCTS, PRODUCT_IDS
 from fabric_schema import MEASURES, COLUMNS
 from search_tool import search_documents
@@ -453,7 +453,7 @@ def build_agent() -> Agent:
 
     return Agent(
         client=client,
-        name="idemitsu-poc-agent-search-iq",
+        name=AGENT_DISPLAY_NAME,
         instructions=AGENT_INSTRUCTIONS,
         tools=tools,
         middleware=[_ToolCallBudgetResetMiddleware(), _PerToolCallLimitMiddleware()],

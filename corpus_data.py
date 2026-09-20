@@ -6,7 +6,7 @@
 A001/A002は、これまでの疎通確認で使っていたquality_report_a.txt / b.txtの
 内容を踏襲している（既存の動作確認クエリ「製品Aの品質基準は？」がそのまま通ることを確認済み）。
 """
-from common import QUALITY_TEAM_GROUP_ID
+from common import ALL_EMPLOYEES_GROUP_ID, QUALITY_TEAM_GROUP_ID
 
 PRODUCTS = [
     {
@@ -175,19 +175,24 @@ PRODUCTS = [
 # quality-team相当のグループのみが閲覧できる想定にしている（品質インシデントの
 # 詳細を含むため、というシナリオ）。それ以外は全社員(all-employees)に公開。
 #
-# quality-team相当のグループの実体（common.QUALITY_TEAM_GROUP_ID）は、
-# .envの QUALITY_TEAM_GROUP_ID で指定する（OBOの動作確認のためEntra IDに実際に
-# 作成したグループのObject ID(GUID)を設定する想定）。コードへの直書きを避けるため
-# 環境変数化しており、未設定時はデモ用の文字列スラッグ"quality-team"にフォールバックする。
-# all-employees側は引き続きデモ用の文字列スラッグのまま（OBO経由のall-employees相当の
-# 実グループが用意でき次第、同様に環境変数化して差し替えること）。
+# 両グループの実体（common.QUALITY_TEAM_GROUP_ID / common.ALL_EMPLOYEES_GROUP_ID）は
+# .env（azd env）で指定する。Entra ID に実際に作成したグループの Object ID(GUID) を
+# 設定する想定で、コードへの直書きは行わない。
+#
+# ★ ここは**エラーにならずに静かに壊れる**箇所。ALL_EMPLOYEES_GROUP_ID が未設定で
+#   スラッグ "all-employees" のままインデックスへ投入すると、OBO でグループを解決した
+#   ユーザー（Graph が返すのは GUID のみ）と一致せず、全社公開のはずの文書が
+#   **誰にも見えなくなる**。インデックス投入時とエージェント実行時で、同じ値が
+#   環境変数に入っていることを必ず確認すること。
+# ★ グループIDを変えた（＝別テナントで作り直した）場合は、**インデックスを作り直して
+#   文書を再投入する**必要がある。acl_groups は投入時点の値を文書に焼き付けるため。
 ACL_GROUPS_BY_PRODUCT_ID = {
-    "A001": ["all-employees"],
-    "A002": ["all-employees"],
-    "A003": ["all-employees"],
-    "A004": ["all-employees"],
-    "A005": ["all-employees"],
-    "A006": ["all-employees"],
+    "A001": [ALL_EMPLOYEES_GROUP_ID],
+    "A002": [ALL_EMPLOYEES_GROUP_ID],
+    "A003": [ALL_EMPLOYEES_GROUP_ID],
+    "A004": [ALL_EMPLOYEES_GROUP_ID],
+    "A005": [ALL_EMPLOYEES_GROUP_ID],
+    "A006": [ALL_EMPLOYEES_GROUP_ID],
     "A007": [QUALITY_TEAM_GROUP_ID],
     "A008": [QUALITY_TEAM_GROUP_ID],
     "A009": [QUALITY_TEAM_GROUP_ID],

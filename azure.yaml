@@ -4,6 +4,10 @@
 # 既存の agent-search-hosted とは **エージェント名・azd環境を分けて** デプロイすること
 # （README「分離ルール」参照）。azd deploy の前に必ず `azd env list` で環境を確認する。
 
+# ここから下の agent-search-iq という名前は、Foundry 上のエージェント名になる。
+# **元テナントへ反映するときは、既存の agent-search-hosted と衝突しないよう
+# 別の名前に変えること**（YAMLのキー名なので環境変数にはできない。
+# 変えたら .env / azd env の IQ_AGENT_NAME も同じ名前に合わせる）。
 name: agent-search-iq
 
 services:
@@ -13,7 +17,10 @@ services:
         language: python
 
         uses:
-            - prjfoundry123
+            # 下の services.foundryproject（このファイル内のローカルな別名）を指す。
+            # 旧テナントのプロジェクト名を直書きしていたのをやめ、
+            # 実際の接続先は AI_FOUNDRY_PROJECT_ENDPOINT だけで決まるようにした。
+            - foundryproject
 
         env:
             AZURE_AI_MODEL_DEPLOYMENT_NAME: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
@@ -39,6 +46,15 @@ services:
             # こちらでは明示的に渡す。
             CURRENT_USER_GROUPS: ${CURRENT_USER_GROUPS}
             QUALITY_TEAM_GROUP_ID: ${QUALITY_TEAM_GROUP_ID}
+
+            # 全社公開文書の ACL グループ。Entra ID の実グループの Object ID を入れる。
+            # 未設定だと corpus_data.py が文字列スラッグ "all-employees" を使い、
+            # OBO でグループ解決したユーザーに全社公開文書が**見えなくなる**
+            # （エラーにならずに0件になる）。
+            ALL_EMPLOYEES_GROUP_ID: ${ALL_EMPLOYEES_GROUP_ID}
+
+            # Agent() に渡す表示名（組織名を含めないこと）。
+            AGENT_DISPLAY_NAME: ${AGENT_DISPLAY_NAME}
 
             OBO_TENANT_ID: ${OBO_TENANT_ID}
             OBO_CLIENT_ID: ${OBO_CLIENT_ID}
@@ -69,9 +85,15 @@ services:
             - protocol: invocations
               version: 2.0.0
 
-    prjfoundry123:
+    # ホスト先の Foundry プロジェクト。キー名はこのファイル内だけの別名で、
+    # 実体は endpoint が指す先。テナントを変えるときは azd env set で
+    # AI_FOUNDRY_PROJECT_ENDPOINT を差し替えるだけでよい（このファイルは触らない）。
+    # 【要確認】azd が endpoint フィールドの ${} 展開を行うことは実機未確認。
+    # azd deploy が「プロジェクトが見つからない」で失敗する場合は、
+    # azd env get-values で値が入っているかを確認し、必要なら実値を直書きする。
+    foundryproject:
         host: azure.ai.project
-        endpoint: https://prjfoundry123-resource.services.ai.azure.com/api/projects/prjfoundry123
+        endpoint: ${AI_FOUNDRY_PROJECT_ENDPOINT}
 
 infra:
     provider: microsoft.foundry

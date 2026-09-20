@@ -53,7 +53,14 @@ import msal
 import requests
 import streamlit as st
 
-from common import FOUNDRY_PROJECT_ENDPOINT, OBO_APP_SCOPE, OBO_CLIENT_ID, OBO_TENANT_ID, QUALITY_TEAM_GROUP_ID
+from common import (
+    FOUNDRY_PROJECT_ENDPOINT,
+    IQ_AGENT_NAME,
+    OBO_APP_SCOPE,
+    OBO_CLIENT_ID,
+    OBO_TENANT_ID,
+    QUALITY_TEAM_GROUP_ID,
+)
 
 # ============================================================================
 # 設定
@@ -63,7 +70,7 @@ _FOUNDRY_SCOPE = "https://ai.azure.com/.default"
 
 _ENDPOINT_BASE = (
     os.environ.get("IQ_AGENT_ENDPOINT_BASE")
-    or f"{FOUNDRY_PROJECT_ENDPOINT.rstrip('/')}/agents/agent-search-iq/endpoint"
+    or f"{FOUNDRY_PROJECT_ENDPOINT.rstrip('/')}/agents/{IQ_AGENT_NAME}/endpoint"
 ).rstrip("/")
 _INVOCATIONS_URL = f"{_ENDPOINT_BASE}/protocols/invocations"
 _RESPONSES_URL = f"{_ENDPOINT_BASE}/protocols/openai/responses"

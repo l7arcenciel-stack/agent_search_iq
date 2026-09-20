@@ -33,6 +33,14 @@ EMBEDDING_DIMENSIONS = int(os.environ.get("AZURE_OPENAI_EMBEDDING_DIMENSIONS", "
 FOUNDRY_PROJECT_ENDPOINT = os.environ["AI_FOUNDRY_PROJECT_ENDPOINT"]
 FOUNDRY_MODEL = os.environ.get("AI_FOUNDRY_MODEL", "gpt-4.1-mini")
 
+# Foundry 上のエージェント名（azure.yaml の services.<name> / name と一致させること）。
+# デモUI・検証スクリプトがエンドポイントURLを組み立てるのに使う。
+# 元テナントへ反映する際は既存エージェントと**必ず別の名前**にする。
+IQ_AGENT_NAME = os.environ.get("IQ_AGENT_NAME", "agent-search-iq")
+
+# Agent() に渡す表示名。組織名を含めないこと（テナントをまたいで使い回すため）。
+AGENT_DISPLAY_NAME = os.environ.get("AGENT_DISPLAY_NAME", "poc-agent-search-iq")
+
 # --- Microsoft Fabric / Power BI（Scenario A: Semantic Model経由の構造化データ照会） ---
 FABRIC_WORKSPACE_ID = os.environ.get("FABRIC_WORKSPACE_ID")
 FABRIC_DATASET_ID = os.environ.get("FABRIC_DATASET_ID")
@@ -64,12 +72,20 @@ def parse_group_names(raw: str) -> list[str]:
     return validate_group_names(groups)
 
 
-CURRENT_USER_GROUPS = parse_group_names(os.environ.get("CURRENT_USER_GROUPS", "all-employees"))
-
-# --- quality-team相当のACLグループ（corpus_data.pyから参照） ---
-# agent_search_starterと同じ考え方：コードへの直書きを避け環境変数化。
-# 未設定時はデモ用の文字列スラッグ"quality-team"にフォールバックする。
+# --- ACLグループ（corpus_data.pyから参照） ---
+# コードへの直書きを避け、すべて環境変数化する（テナントを差し替えたときに
+# 値の変更だけで済むようにするため。docs/new_tenant_setup.html 参照）。
+# 未設定時はデモ用の文字列スラッグにフォールバックするが、**実運用では必ず
+# Entra ID の実グループの Object ID(GUID) を設定すること**。
+#
+# ここがスラッグのままだと、OBO 登録済みユーザー（実グループの GUID しか持たない）と
+# 文書側の acl_groups（スラッグ）が一致せず、**エラーにならずに検索結果が0件になる**。
 QUALITY_TEAM_GROUP_ID = os.environ.get("QUALITY_TEAM_GROUP_ID", "quality-team")
+ALL_EMPLOYEES_GROUP_ID = os.environ.get("ALL_EMPLOYEES_GROUP_ID", "all-employees")
+
+CURRENT_USER_GROUPS = parse_group_names(
+    os.environ.get("CURRENT_USER_GROUPS", ALL_EMPLOYEES_GROUP_ID)
+)
 
 # --- OBO（On-Behalf-Of）設定 ---
 # main.pyの/obo/registerルートと、obo.pyのトークン交換で使う。事前にEntra IDへの

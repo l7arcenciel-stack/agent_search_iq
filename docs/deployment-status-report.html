@@ -157,11 +157,26 @@
     <span>サブスクリプション <b>Azure subscription 1</b> (<code>c90b917f-...a7a8</code>)</span>
     <span>テナント <b>naohirolab.onmicrosoft.com</b></span>
     <span>リソースグループ <b>rg-agent-search-iq</b> (japaneast)</span>
+    <span>追記 <b>2026-09-21</b></span>
+  </div>
+
+  <div class="callout callout-info">
+    <b>追記（2026-09-21）— この後の実行で状況が変わった箇所</b><br>
+    以下は <b>2026-09-20 時点のスナップショット</b>として残してあるが、翌日の再デプロイで次の3点が変わった。
+    各セクションの該当箇所にも注記してある。
+    <ul style="margin:10px 0 0;padding-left:20px;">
+      <li><b>Bicepの修正が実デプロイで検証された。</b><code>az deployment group create</code> の1回実行でプロジェクト
+        <code>agentsearchiq</code> が作成され、<code>provisioningState: Succeeded</code>。§02 の修正内容は正しかったことが確認できた。</li>
+      <li><b>手動作成した回避策プロジェクトは削除した。</b><code>aif-agentsearchiq-t6pkj7-project</code> は役目を終えたため削除済み
+        （接続0件の空プロジェクトであることを確認したうえで実施）。現存するプロジェクトは <code>agentsearchiq</code> のみ。</li>
+      <li><b>Fabric容量 F2 を作成した。</b><code>deployFabricCapacity=true</code> で実行。<b>固定費が発生するようになったため、§03 のコストメモは現状と合わない。</b></li>
+    </ul>
   </div>
 
   <section>
     <h2><span class="num">01</span>現在のAzureリソースの状態</h2>
-    <p class="section-lede">what-if検証は5リソースすべてCreate判定で成功。実デプロイも最終的に全リソースが成功(プロジェクトのみ手動作成)。</p>
+    <p class="section-lede">what-if検証は5リソースすべてCreate判定で成功。実デプロイも最終的に全リソースが成功(プロジェクトのみ手動作成)。
+      <b>※ 下表は 2026-09-20 時点。プロジェクトとFabric容量の行は 2026-09-21 に変化している（各行の注記を参照）。</b></p>
     <div class="table-wrap">
       <table>
         <tr><th>リソース</th><th>状態</th><th>詳細</th></tr>
@@ -186,14 +201,27 @@
           <td>sku: Standard, capacity: 1</td>
         </tr>
         <tr>
-          <td class="res-name">AI Foundryプロジェクト <code>aif-agentsearchiq-t6pkj7-project</code></td>
-          <td><span class="pill pill-ok">Succeeded</span></td>
-          <td>ポータルから手動作成 → 成功。根本原因を特定しBicepも修正済み(詳細は次項)<br>endpoint: <code>https://aif-agentsearchiq-t6pkj77hzmit2.services.ai.azure.com/api/projects/aif-agentsearchiq-t6pkj7-project</code></td>
+          <td class="res-name">AI Foundryプロジェクト <code>aif-agentsearchiq-t6pkj7-project</code><br><small>(回避策として手動作成したもの)</small></td>
+          <td><span class="pill pill-bad">2026-09-21 削除済み</span></td>
+          <td><s>ポータルから手動作成 → 成功。根本原因を特定しBicepも修正済み(詳細は次項)</s><br>
+            <b>2026-09-21:</b> Bicepの修正により正規のプロジェクトが作成できたため、この回避策プロジェクトは削除した。
+            接続0件・子リソースなしの空プロジェクトであること、ローカルの <code>.env</code> / <code>.azure</code> から参照されていないことを確認したうえで実施。
+            アカウント側のモデルデプロイ2件には影響なし</td>
         </tr>
         <tr>
-          <td class="res-name">Fabric容量</td>
-          <td><span class="pill pill-ok">Skipped (想定通り)</span></td>
-          <td><code>deployFabricCapacity=false</code>のため未作成。個人利用のコスト最小方針通り</td>
+          <td class="res-name">AI Foundryプロジェクト <code>agentsearchiq</code><br><small>(Bicepが正規に作成)</small></td>
+          <td><span class="pill pill-ok">Succeeded</span></td>
+          <td><b>2026-09-21 追加。</b><code>az deployment group create</code> の1回実行で作成成功（§02 の修正が有効だったことの実証）<br>
+            endpoint: <code>https://aif-agentsearchiq-t6pkj77hzmit2.cognitiveservices.azure.com/api/projects/agentsearchiq</code><br>
+            これが <code>AI_FOUNDRY_PROJECT_ENDPOINT</code> に設定する値</td>
+        </tr>
+        <tr>
+          <td class="res-name">Fabric容量<br><code>fabagentsearchiqt6pkj77hzmit2</code></td>
+          <td><span class="pill pill-ok">2026-09-21 作成済み</span></td>
+          <td><s><code>deployFabricCapacity=false</code>のため未作成。個人利用のコスト最小方針通り</s><br>
+            <b>2026-09-21:</b> <code>deployFabricCapacity=true</code> / <code>fabricSkuName=F2</code> で作成。japaneast、state: <b>Active</b>。
+            容量管理者は <code>fabricAdminMembers</code> にCLIから渡した（実値をリポジトリに入れないため <code>main.parameters.json</code> は <code>[]</code> のまま）。
+            <b>Activeの間は課金される。§03 参照</b></td>
         </tr>
       </table>
     </div>
@@ -246,23 +274,59 @@
       Microsoft LearnのBicepサンプルはアカウント側のidentityしか示しておらず、プロジェクト側は省略されていたため見落としていた。
       <code>infra/modules/ai-foundry.bicep</code> は修正済みで、今後は <code>az deployment group create</code> の1回実行だけでプロジェクトまで作成できる。
     </div>
+
+    <div class="callout callout-info" style="margin-top:14px;">
+      <b>2026-09-21 追記：この修正は実デプロイで検証済み。</b>
+      <code>az deployment group create</code> を実行し、プロジェクト <code>agentsearchiq</code> が
+      <code>provisioningState: Succeeded</code> で作成された。手動作成に頼る必要はなくなった。
+      <p style="margin:8px 0 0;">
+        ただし<b>1回目の実行は別の理由で失敗した</b>ので記録しておく。
+        <code>RequestConflict: Another operation is being performed on the parent resource</code> —
+        アカウント本体の更新とプロジェクト作成が同時に走ったことによる一時的な競合で、
+        Bicepの不備ではない。<b>リソース自体は作成されており</b>、同じコマンドをもう一度流すだけで
+        <code>Succeeded</code> になった。既存アカウントに対してプロジェクトを追加する場合に起きうる。
+      </p>
+    </div>
   </section>
 
   <section>
     <h2><span class="num">03</span>コストメモ</h2>
-    <p class="section-lede">現時点で作成済みのリソースのうち、固定費が発生するものはない。</p>
+    <p class="section-lede"><s>現時点で作成済みのリソースのうち、固定費が発生するものはない。</s>
+      <b>※ 2026-09-21 に Fabric容量 F2 を作成したため、この前提は変わった。</b></p>
     <ul style="font-size:13.5px;color:var(--muted);padding-left:20px;">
       <li>AI Search: free tier のため $0</li>
       <li>AI Foundryアカウント自体: 固定費なし(S0は従量課金の器)</li>
       <li>プロジェクト: 固定費なし</li>
       <li>モデルデプロイ2件: 呼び出し量に応じた従量課金のみ、未使用なら課金なし</li>
-      <li>Fabric容量: 未作成のため $0</li>
+      <li><s>Fabric容量: 未作成のため $0</s></li>
     </ul>
+
+    <div class="callout" style="margin-top:16px;">
+      <b>2026-09-21 以降：Fabric容量 F2 が課金対象になった</b>
+      <p style="margin:8px 0 0;">
+        F2 は従量課金で、目安として時間あたり $0.3〜0.4。<b>Activeのまま放置すると月 $250 前後</b>になる
+        （正確な単価はリージョンと為替で変わるため、Azureの価格ページで確認すること）。
+        <b>使わない間は一時停止すればほぼ $0 まで落ちる</b>（OneLakeのストレージ分のみ）。
+      </p>
+      <pre style="margin:10px 0 0;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;">az resource invoke-action -g rg-agent-search-iq -n fabagentsearchiqt6pkj77hzmit2 \
+  --resource-type Microsoft.Fabric/capacities --action suspend
+
+# 作業再開時
+az resource invoke-action -g rg-agent-search-iq -n fabagentsearchiqt6pkj77hzmit2 \
+  --resource-type Microsoft.Fabric/capacities --action resume</pre>
+      <p style="margin:10px 0 0;">
+        停止中はワークスペースの中身が見えなくなるため、作業する日は先に <code>resume</code> する。
+      </p>
+    </div>
   </section>
 
   <footer>
     このログは <code>docs/azure-resources-report.html</code>(必要リソース一覧・最小コスト構成)の続き。infra一式は <code>infra/</code> ディレクトリを参照。
     プロジェクト作成問題の修正は <code>infra/modules/ai-foundry.bicep</code> にコミット済み。
+    <br><br>
+    <b>本文は 2026-09-20 時点の記録で、2026-09-21 の変更は取り消し線と「追記」で併記してある</b>
+    （当時の判断の経緯を消さずに残すため）。ここから先の構築手順は
+    <code>docs/new_tenant_setup.html</code>、決めた値の記録は <code>docs/tenant_config_record.md</code> を参照。
   </footer>
 
 </div>

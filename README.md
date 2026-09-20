@@ -8,6 +8,15 @@
 OBO 登録（Invocations）、Tool Call Limit middleware、`_OBO_CACHE` の設計と経緯は
 `agent_search_hosted/README.md` と同一なので、そちらを参照。
 
+`fabric_notebooks/` は **Fabric のノートブック上で実行する PySpark**（オントロジーにバインドする
+Delta テーブルの作成）。エージェント本体からは import されず、`.agentignore` でデプロイ対象外。
+書き方の決まりは `fabric_notebooks/README.md` を参照。
+
+**別テナントで一式を組み直す場合**は
+[docs/new_tenant_setup.html](docs/new_tenant_setup.html)（新テナントでの再構築手順）と
+[docs/apply_to_original_tenant.html](docs/apply_to_original_tenant.html)（元テナントへの反映手順）、
+記録用テンプレート [docs/tenant_config_record.md](docs/tenant_config_record.md) を参照。
+
 ---
 
 ## 0. 分離ルール（既存デモを壊さないため）
@@ -42,8 +51,20 @@ OBO 登録（Invocations）、Tool Call Limit middleware、`_OBO_CACHE` の設�
 | `.agentignore` | デモUI・`setup_toolbox.py` を除外（既存で漏れていた `demo_chat_simple.py` も） |
 | `client_test_responses_session.py` | 接続先 URL を `agent-search-iq` に変更 |
 
-`common.py` `corpus_data.py` `search_tool.py` `query_fabric.py` `fabric_client.py`
-`fabric_schema.py` `obo.py` は**無変更**。
+`search_tool.py` `query_fabric.py` `fabric_client.py` `obo.py` は**無変更**。
+
+`common.py` `corpus_data.py` `fabric_schema.py` は、テナント移行のために
+**ハードコードの環境変数化**だけを行った（ロジックは無変更）:
+
+- `ALL_EMPLOYEES_GROUP_ID` を新設。`corpus_data.py` の ACL が文字列スラッグ
+  `"all-employees"` を直書きしていたのをやめ、Entra の実グループID を使えるようにした。
+  旧環境では、この値がスラッグのままだったため **OBO 登録済みユーザーに全社公開文書が
+  見えなくなる**（エラーが出ずに0件になる）問題があった。
+- `IQ_AGENT_NAME` / `AGENT_DISPLAY_NAME` を新設。`main.py` の `Agent(name=...)` に
+  組織名が直書きされていたのと、デモUI・検証スクリプトがエージェント名を
+  直書きしていたのをやめた。
+- `fabric_schema.py` は**環境変数では吸収できない**（接続先セマンティックモデルの
+  実構造そのもの）ため、テナントを移すときは転記し直す必要がある旨を冒頭に明記した。
 
 `FABRIC_IQ_TOOLBOX_ENDPOINT` が未設定のときは、**Fabric IQ 抜きで起動する**（起動ログに警告）。
 Azure 側の準備が終わる前でも、コンテナの起動と既存2ツールの疎通を先に確認できるようにするため。

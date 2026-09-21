@@ -242,6 +242,7 @@
         <tr><td>5</td><td><s>新規アプリ登録②（Fabric IQ 接続用）</s> → <b>不要</b>。新テナントで確認した結果、Fabric IQ ツールの認証は「OAuth ID パススルー」（<code>UserEntraToken</code>：利用者本人のトークンをそのまま渡す）で、独自アプリもリダイレクト URI も要らなかった</td><td>—</td><td>—</td></tr>
         <tr><td>6</td><td>Foundry プロジェクトの<b>ロール割り当て</b>：テストユーザー2人に Foundry User 相当、自分に Foundry Project Manager</td><td>該当リソースの所有者／ユーザーアクセス管理者</td><td><a href="#s4-6">4-6</a> / <a href="#s6">6</a></td></tr>
         <tr><td>7</td><td>Fabric 容量への<b>ワークスペース作成権限</b>（新しいワークスペースを既存容量に割り当てられるか）</td><td>Fabric 容量管理者</td><td><a href="#s4-1">4-1</a></td></tr>
+        <tr><td>8</td><td><b>【条件付き・要承認】</b>Fabric テナント設定「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で<b>処理</b>できます」の有効化。<br>新テナント（Japan East）で Fabric IQ の自然文検索が失敗し、この設定が原因と見ている（検証中）。<b>質問文などが国外で処理される</b>ため、<b>データ所在地について社内の承認が要る</b>可能性がある。<b>新テナントで必要と確定したら依頼する</b></td><td>Fabric 管理者（＋情報セキュリティ部門の承認）</td><td><a href="new_tenant_setup.html#s2-3">新テナント 2-3</a></td></tr>
       </tbody>
     </table>
   </div>
@@ -373,6 +374,12 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
       <p class="fix">→ <b>作業前に必ず <code>az account show</code> でテナントを確認する。</b>新テナント側で使った tenant_guard の期待値を、元テナントのIDに入れ替えて使う。</p>
       <pre>az account show --query "{tenant:tenantId, sub:name, user:user.name}" -o table
 azd env list</pre>
+    </div>
+
+    <div class="silent-item">
+      <h4><span class="n">G</span>チャットモデルの容量（TPM）を既存デモと共有する</h4>
+      <p>Foundry プロジェクトを流用すると、新エージェントは<b>既存デモと同じモデルのデプロイ</b>（例: <code>gpt-4.1-mini</code>）を使う。新テナントでは、Fabric IQ のツール定義がプロンプトに乗るぶん消費が増え、容量 1（1,000 TPM）ではすぐ<b>レート制限</b>になった。</p>
+      <p class="fix">→ 新エージェントを動かすと、<b>凍結中の既存デモがレート制限に巻き込まれる</b>可能性がある。デモの時間帯が重なるなら、容量を上げる（Standard は従量課金なので固定費は増えない）か、新エージェント用に<b>別名のモデルデプロイ</b>を作って <code>AI_FOUNDRY_MODEL</code> を分ける。容量変更もデプロイ作成も既存デモへの影響が読みにくいので、実施前に既存エージェントの回帰確認（§6）の準備をしておく。</p>
     </div>
   </div>
 

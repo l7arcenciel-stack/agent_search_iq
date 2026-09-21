@@ -290,9 +290,121 @@ FABRIC_IQ_ONTOLOGY_WORKSPACE_ID=<WS_ID> FABRIC_IQ_ONTOLOGY_ITEM_ID=<ONT_ID> \
 
 ---
 
+## 12. AI Search のインデックス作成と文書投入 → `ingest_sample_docs.py`
+
+リポジトリに投入スクリプトが無かったため新規に作成（`corpus_data.py` のコメントで参照されていた名前）。
+鍵は画面に出さず、`az` の出力を環境変数に直接入れて実行した。
+```bash
+export AZURE_SEARCH_API_KEY=$(az search admin-key show --service-name <SEARCH> -g <RG> --query primaryKey -o tsv)
+export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name <ACCOUNT> -g <RG> --query key1 -o tsv)
+export QUALITY_TEAM_GROUP_ID=<GUID> ALL_EMPLOYEES_GROUP_ID=<GUID> ...
+./.venv/Scripts/python ingest_sample_docs.py --dry-run
+./.venv/Scripts/python ingest_sample_docs.py
+```
+- 20文書（10製品×品質報告書・仕様書）。A001〜A006 は全社公開、A007〜A010 は品質チーム限定。
+- **グループIDが GUID でなければ投入を拒否する**ガードを入れた（スラッグのまま投入すると誰にも見えなくなるため）。
+- 確認（`search_tool.search_documents` を直接呼び出し）:
+
+| 検索 | 結果 |
+|---|---|
+| 品質チーム所属で A008（限定） | 2件 |
+| 未所属で A008（限定） | **0件** |
+| 未所属で A001（公開） | 1件 |
+
+---
+
+## 13. azd の導入と環境作成
+
+この PC には `azd` が入っていなかった。
+```powershell
+winget install --id Microsoft.Azd -e --accept-source-agreements --accept-package-agreements --silent
+azd config set auth.useAzCliAuth true          # azd login の代わりに az login の資格情報を使う
+azd extension install azure.ai.agents           # host: azure.ai.agent に必要
+azd env new <ENV_NAME> --subscription <SUB_ID> --location japaneast --no-prompt
+azd env set <KEY> <VALUE>                       # §6 の対応表どおりに全部
+```
+- winget で入れた直後は、開いているシェルの PATH に反映されない。新しいシェルを開くか PATH を読み直す。
+  Git Bash からは見えなかったので PowerShell で操作した。
+- シークレット（Search キー、AOAI キー、OBO シークレット）は `az` の出力と保存済みファイルから
+  直接 `azd env set` に渡し、画面には出さなかった。azd の環境は `.azure/<ENV_NAME>/.env` に保存される
+  （`.gitignore` 済み。ただし OneDrive 配下なので同期はされる点に注意）。
+- リポジトリ直下に置かれていた `AzureCLI.msi` がデプロイパッケージに含まれてしまうため、
+  `.agentignore` に `*.msi` を追加した（あわせて `docs/`、`infra/`、`ingest_sample_docs.py` も除外）。
+
+---
+
+## 14. デプロイ（`azd deploy`）
+
+```powershell
+azd env list
+azd deploy --no-prompt
+```
+- 1回目: `Microsoft Foundry project ID is required: AZURE_AI_PROJECT_ID is not set`
+- 2回目: `Foundry dependencies are not ready: foundryproject (azure.ai.project): FOUNDRY_PROJECT_ENDPOINT is not set`
+  （`azure.yaml` の `endpoint: ${AI_FOUNDRY_PROJECT_ENDPOINT}` とは別に、この名前で要求される）
+- 3回目: 成功（2分41秒）。コードパッケージからエージェントを作成 → 起動待ちのポーリング（12回）→ 環境変数の登録。
+  出力に Responses / Invocations のエンドポイントとポータルのプレイグラウンド URL が出る。
+```powershell
+azd env set AZURE_AI_PROJECT_ID      "/subscriptions/<SUB>/resourceGroups/<RG>/providers/Microsoft.CognitiveServices/accounts/<ACCOUNT>/projects/<PROJECT>"
+azd env set FOUNDRY_PROJECT_ENDPOINT "https://<ACCOUNT>.services.ai.azure.com/api/projects/<PROJECT>"
+```
+
+### 動作確認（運用者の資格情報で直接 POST）
+```
+POST https://<ACCOUNT>.services.ai.azure.com/api/projects/<PROJECT>/agents/agent-search-iq/endpoint/protocols/openai/responses?api-version=v1
+Authorization: Bearer <scope https://ai.azure.com/.default のトークン>
+{"input": "製品A001の品質基準について教えて", "stream": false}
+```
+- `search_documents_tool` が呼ばれ、A001 の品質基準で回答（約24秒）。
+- **`function_call_output` は Responses の `output` に含まれる**（§8 #9 が解決）。
+
+---
+
+## 15. レート制限（チャットモデルの容量不足）
+
+Fabric IQ を使う質問で `Model deployment rate limit exceeded`。Bicep の既定で `gpt-4.1-mini` の容量が **1（1,000 TPM）**だった。
+Fabric IQ のツール定義がプロンプトに乗るぶん、すぐ上限に当たる。
+```bash
+az cognitiveservices account deployment create --name <ACCOUNT> -g <RG> --deployment-name gpt-4.1-mini \
+  --model-name gpt-4.1-mini --model-version 2025-04-14 --model-format OpenAI --sku-name Standard --sku-capacity 50
+```
+- `az cognitiveservices usage list` には Standard の枠が表示されなかったが、50 はそのまま通った。
+- Standard は従量課金なので、容量を上げても固定費は増えない。
+- 次の Bicep 実行で 1 に戻らないよう `infra/main.parameters.json` の `chatModelCapacity` も 50 にした。
+
+---
+
+## 16. Fabric IQ の自然文検索が失敗する（調査中）
+
+エージェント経由では `fabric_iq_ontology___search_ontology` が `Error: Function failed.` を返した。
+ログ（`azd ai agent monitor --session-id ...`）には `ToolExecutionException` までしか出ないため、
+**Toolbox の MCP エンドポイントを直接呼んで**生のエラーを見た。
+```
+POST https://<ACCOUNT>.services.ai.azure.com/api/projects/<PROJECT>/toolboxes/fabric-iq-toolbox/versions/1/mcp?api-version=v1
+Accept: application/json, text/event-stream
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"fabric_iq_ontology___search_ontology",
+  "arguments":{"naturalLanguageQuery":"製品A005の商品群名称","naturalLanguageResponse":true}}}
+```
+| 確認 | 結果 |
+|---|---|
+| 本人トークンで届くか | 届く（`UserEntraToken` のパススルーは機能） |
+| ツール名 | `fabric_iq_ontology___list_ontology_entity_types` / `fabric_iq_ontology___search_ontology`。**接頭辞なしの名前では `No tool config matches tool name`** |
+| エンティティ一覧 | 成功（ただし `properties` は空で返る。一覧の返し方の都合で、スキーマ自体は正常） |
+| 自然文検索 | **`Failed to translate NL query to ontology query.`**（約2秒で失敗） |
+| 容量を F2 に戻す | 同じエラー → 容量の種類は原因ではない |
+| GraphModel の定義（`POST /items/<ID>/getDefinition`） | ノード型・プロパティ・データソース（`lh_public` / `lh_restricted`）・列の対応すべて正常 |
+
+- 残る候補はテナント設定「**Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で処理できます**」（無効だった）。
+  設定の説明に「容量の地域が、Fabric のために Azure OpenAI を使える地域の外部にある場合のみ適用」とあり、Japan East の容量が該当する見込み。
+- **2026-09-21 に有効化（「格納できます」の方は無効のまま）。反映待ちの間に試用容量へ戻し、F2 は停止。**
+- 元テナントでは、この設定は**データの国外処理**になるので社内承認が要る可能性がある（元テナント手順書の依頼 #8）。
+
+---
+
 ## 未完了（2026-09-21 時点）
 
-- AI Search のインデックス作成と文書投入（投入スクリプトがリポジトリに無い）
-- azd 環境の作成と `azd deploy`
+- 国外処理設定の反映後、自然文検索が通るかの確認（§16）
 - 2人での比較（デモ UI）
 - 不要だったアプリ登録②の削除

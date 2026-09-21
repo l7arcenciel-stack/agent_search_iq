@@ -58,3 +58,11 @@ fabric_notebooks/
 
 # テナント側の準備（Entra・Fabric アイテム・Foundry ロール）を行うスクリプト。手元で実行するもの。
 tenant_setup/
+
+# AI Search への文書投入（手元で1回実行するもの）、手順書・IaC はコンテナに不要
+ingest_sample_docs.py
+docs/
+infra/
+
+# 手元に置かれたインストーラ等（数十MBあり、リモートビルドへのアップロードを重くする）
+*.msi

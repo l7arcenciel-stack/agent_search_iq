@@ -12,7 +12,7 @@
       "value": "gpt-4.1-mini"
     },
     "chatModelCapacity": {
-      "value": 1
+      "value": 50
     },
     "embeddingModelName": {
       "value": "text-embedding-3-small"

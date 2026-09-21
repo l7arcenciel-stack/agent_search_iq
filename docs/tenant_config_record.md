@@ -137,6 +137,7 @@ Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`
 | Foundry プロジェクト名 | | | 流用 | 元テナントは既存プロジェクトに相乗り |
 | Foundry プロジェクトエンドポイント | | | 変える | `AI_FOUNDRY_PROJECT_ENDPOINT` |
 | チャットモデル デプロイ名 | | | 同じ | `AI_FOUNDRY_MODEL` |
+| チャットモデルの容量（TPM） | 50（1 ではレート制限） | | — | 元テナントでは**既存デモと共有**になる。別デプロイにするか要検討 |
 | 埋め込みモデル デプロイ名 | | | 同じ | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` |
 | Azure OpenAI エンドポイント | | | 変える | |
 | Azure OpenAI キーの保管場所 | | | — | **値は書かない** |
@@ -152,7 +153,8 @@ Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`
 |---|---|---|---|---|
 | エージェント名（`azure.yaml`） | `agent-search-iq` | | **必ず変える** | 既存 `agent-search-hosted` と衝突させない。`IQ_AGENT_NAME` も合わせる |
 | `AGENT_DISPLAY_NAME` | | | **必ず変える** | ログで見分けるため |
-| azd 環境名 | | | **必ず変える** | `azd deploy` の前に毎回 `azd env list` |
+| azd 環境名 | `agent-search-iq-newtenant` | | **必ず変える** | `azd deploy` の前に毎回 `azd env list` |
+| azd が追加で要求した変数 | `AZURE_AI_PROJECT_ID` / `FOUNDRY_PROJECT_ENDPOINT` | | 同じ | 無いとデプロイが止まる |
 | Fabric IQ ツール（接続）名 | `ontagentsearchiq` | | 変える | ポータルの**ビルド > ツール**から作る（「接続」画面の「Microsoft Fabric」は別物）。認証は既定の「OAuth ID パススルー」 |
 | 接続の共有設定 | `isSharedToAll: false`（作成直後） | | — | 作成者以外が使えない可能性【要確認】 |
 | Fabric IQ 接続ID | | | 変える | `FABRIC_IQ_PROJECT_CONNECTION_ID`。**ARM のフルパス**（`/subscriptions/.../connections/<name>`） |
@@ -189,8 +191,8 @@ Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`
 | 5 | azd が `azure.yaml` の `endpoint` で `${}` を展開するか | | |
 | 6 | Foundry に「Fabric IQ」接続タイプが出るか | 「接続」画面には無い。**ビルド > ツール**に Fabric IQ があり、そこから作る | 2026-09-21 |
 | 7 | Fabric IQ が呼び出し元本人として動くか | 接続の認証方式は `UserEntraToken`（本人トークンを渡す）。実際の挙動は未確認 | |
-| 8 | Fabric IQ の MCP ツール名と `output` 上の表現 | | |
-| 9 | `function_call_output` が `output` に含まれるか | | |
+| 8 | Fabric IQ の MCP ツール名と `output` 上の表現 | `fabric_iq_ontology___list_ontology_entity_types` / `fabric_iq_ontology___search_ontology`。通常の `function_call` として出る | 2026-09-21 |
+| 9 | `function_call_output` が `output` に含まれるか | 含まれる | 2026-09-21 |
 | 10 | Fabric IQ 経由の応答時間 | | |
 | 11 | Tool Call Limit が MCP ツールにも効くか | | |
 | 12 | Invocations の `session_id` / `user_id` が Responses と一致するか | | |
@@ -203,3 +205,4 @@ Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`
 | 19 | 同じエッジテーブルを2リレーションで共用できるか | 共用はできた。ただし権限分離のため最終的にはエッジも分けた | 2026-09-21 |
 | — | 作成直後の Fabric IQ 接続が `isSharedToAll: false` の影響 | | |
 | — | Foundry Agent Consumer で Invocations（OBO 登録）まで通るか | | |
+| 22 | Fabric IQ の自然文検索が失敗する（日本リージョンで AI の国外処理設定が要るか） | 調査中。容量の種類・GraphModel は原因ではない。国外処理設定を有効化して反映待ち | |

@@ -371,7 +371,14 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <b>Graph とデータエージェントの2設定は（2026-09-21 時点で）返ってこない</b>ため、
         <b>ポータルで直接確認すること</b>。API で見えないことを「設定が無い」と解釈しない。</dd>
       <dt>落とし穴</dt><dd>テナント設定の反映には数分〜十数分かかることがある。すぐ出てこなくても一度時間を置く。<br>新テナントでは自分が Global Administrator だが、<b>Fabric 管理者ロールは別枠</b>。管理ポータルが開けない場合は、Entra ID で自分に Fabric 管理者（Power BI 管理者）ロールを付ける。<br>
-        <b>Ontology だけを有効にして満足しない。</b>依存する2設定が無効のままだと、オントロジーは作れても中身が機能しない形で詰まる可能性がある。</dd>
+        <b>Ontology だけを有効にして満足しない。</b>依存する2設定が無効のままだと、オントロジーは作れても中身が機能しない形で詰まる可能性がある。<br>
+        <b>【要確認】日本リージョンの容量では、AI 処理の国外処理設定が要る可能性が高い。</b>
+        Fabric IQ の自然文検索（<code>search_ontology</code>）が <code>Failed to translate NL query to ontology query.</code> で即座に失敗した。
+        エンティティ一覧の取得は成功し、GraphModel のスキーマも正常、容量を F2 に戻しても同じだったため、残る候補が
+        <b>「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で<u>処理</u>できます」</b>（<code>AllowSendAOAIDataToOtherRegions</code>）。
+        設定の説明に「容量の地域が、Fabric のために Azure OpenAI を使用できる地域の外部にある場合にのみ適用」とある。
+        <b>オンにすると質問文などのデータが国外で処理される</b>ので、元テナントでは<b>データ所在地の観点で社内承認が要る</b>可能性がある。
+        「…外部に<u>格納</u>できます」のほうは、まず無効のままで試す。</dd>
     </dl>
   </div>
 
@@ -387,7 +394,8 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li>出力（<code>AZURE_SEARCH_ENDPOINT</code>, <code>AI_FOUNDRY_PROJECT_ENDPOINT</code> など）を控える。<b>キーは出力に含まれない</b>ので、<span class="path">infra/README.md</span> のコマンドで別途取得する。</li>
       </ol></dd>
       <dt>確認方法</dt><dd><code>az deployment group show ... --query properties.outputs</code> で各エンドポイントが返る。Foundry ポータルでプロジェクトが開け、モデルのデプロイが「成功」になっている。</dd>
-      <dt>落とし穴</dt><dd>AI Search の <code>free</code> SKU は SLA なし・50MB・3インデックスまで。権限確認用に<b>インデックスを複数作る</b>ので、上限に当たりやすい。心配なら <code>basic</code> にする。<br>埋め込みモデルの次元数（<code>text-embedding-3-small</code> = 1536）を変える場合は <code>AZURE_OPENAI_EMBEDDING_DIMENSIONS</code> も合わせる。</dd>
+      <dt>落とし穴</dt><dd>AI Search の <code>free</code> SKU は SLA なし・50MB・3インデックスまで。権限確認用に<b>インデックスを複数作る</b>ので、上限に当たりやすい。心配なら <code>basic</code> にする。<br>埋め込みモデルの次元数（<code>text-embedding-3-small</code> = 1536）を変える場合は <code>AZURE_OPENAI_EMBEDDING_DIMENSIONS</code> も合わせる。<br>
+        <b>チャットモデル（<code>gpt-4.1-mini</code>）の容量は 50 以上にする</b>（<code>chatModelCapacity</code>）。1 だとエージェントがツール定義込みのプロンプトを送った時点でレート制限になる（5-5）。</dd>
     </dl>
   </div>
 
@@ -700,19 +708,22 @@ Entity type names must be unique within a namespace.</pre>
   </div>
 
   <div class="step" id="s4-5">
-    <label class="step-head"><input type="checkbox"><span class="step-no">4-5</span><span class="step-title">AI Search のインデックスを作り、新しいグループIDで文書を再投入する</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-5</span><span class="step-title">AI Search のインデックスを作り、新しいグループIDで文書を再投入する</span><span class="badge b-ok">確認済</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>文書側の ACL を、新テナントのグループIDに合わせて作り直す。</dd>
-      <dt>どこで</dt><dd>手元の PC。<span class="path">corpus_data.py</span> ＋ インデックス作成・投入スクリプト</dd>
+      <dt>どこで</dt><dd>手元の PC。<span class="path">ingest_sample_docs.py</span>（<span class="path">corpus_data.py</span> の架空製品10件から文書を作って投入する）</dd>
       <dt>手順</dt><dd><ol>
-        <li><code>QUALITY_TEAM_GROUP_ID</code> と <code>ALL_EMPLOYEES_GROUP_ID</code> に、3-1 の<b>グループの GUID</b> を設定する（<span class="path">.env</span>）。</li>
-        <li><code>AZURE_SEARCH_INDEX_NAME</code> を設定する。</li>
-        <li>インデックスを作成する（ベクトルフィールド <code>content_vector</code>、セマンティック構成 <code>default-semantic</code>、<code>acl_groups</code> は <code>Collection(Edm.String)</code>）。</li>
-        <li>文書を投入する。<span class="path">corpus_data.py</span> の <code>acl_groups_for_document_id()</code> が製品IDごとの ACL を返すので、それを <code>acl_groups</code> に入れる。</li>
-        <li>投入後、<b>実際に入った値が GUID になっていること</b>を1件取り出して目視確認する。</li>
-      </ol></dd>
+        <li><code>QUALITY_TEAM_GROUP_ID</code> と <code>ALL_EMPLOYEES_GROUP_ID</code> に、3-1 の<b>グループの GUID</b> を設定する。</li>
+        <li><code>AZURE_SEARCH_*</code> と <code>AZURE_OPENAI_*</code> を設定する。キーは画面に出さず <code>az</code> の出力をそのまま環境変数に入れる（下の例）。</li>
+        <li><code>--dry-run</code> で文書と ACL の振り分けを確認してから本実行する。インデックスが無ければ作られる。</li>
+      </ol>
+      <pre>export AZURE_SEARCH_API_KEY=$(az search admin-key show --service-name &lt;SEARCH&gt; -g &lt;RG&gt; --query primaryKey -o tsv)
+export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;ACCOUNT&gt; -g &lt;RG&gt; --query key1 -o tsv)
+./.venv/Scripts/python ingest_sample_docs.py --dry-run
+./.venv/Scripts/python ingest_sample_docs.py          # グループを作り直したら --recreate</pre>
+      新テナントでは20文書（10製品×品質報告書・仕様書）。A001〜A006 が全社公開、A007〜A010 が品質チーム限定。</dd>
       <dt>確認方法</dt><dd><code>python search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で A008 の文書が返り、<code>&lt;全社員のGUID&gt;</code> では 0 件になる。これが通ればデモの片側が成立している。</dd>
-      <dt>落とし穴</dt><dd><b>ここが §1 A そのもの。</b>スラッグのまま投入すると、エラーは一切出ないのに全員が何も見られなくなる。<br>投入スクリプトとエージェント本体で<b>同じ環境変数の値</b>が読まれていることを確認する。<span class="path">.env</span> と <code>azd env</code> の両方に設定が要る（→ §6）。<br>投入スクリプト（<code>ingest_sample_docs.py</code> 相当）は<b>このリポジトリには無い</b>。別フォルダから持ってくるか、新規に書く。</dd>
+      <dt>落とし穴</dt><dd><b>ここが §1 A そのもの。</b>スラッグのまま投入すると、エラーは一切出ないのに全員が何も見られなくなる。<br>投入スクリプトとエージェント本体で<b>同じ環境変数の値</b>が読まれていることを確認する。<span class="path">.env</span> と <code>azd env</code> の両方に設定が要る（→ §6）。<br><span class="path">ingest_sample_docs.py</span> は<b>グループIDが GUID でなければ投入を拒否する</b>（このガードを外すのは <code>--allow-slugs</code> を付けたときだけ）。<br>元テナントでは <code>AZURE_SEARCH_INDEX_NAME</code> を<b>既存と別名</b>にしてから実行する。</dd>
     </dl>
   </div>
 
@@ -821,13 +832,17 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
       <dt>目的</dt><dd>エージェントを新テナントの Foundry プロジェクトへ載せる。</dd>
       <dt>どこで</dt><dd>リポジトリ直下のターミナル</dd>
       <dt>手順</dt><dd><ol>
-        <li>§6 の対応表に沿って <code>azd env set</code> をすべて実行する（<span class="path">.env.example</span> が雛形）。</li>
-        <li><code>azd env list</code> で環境を再確認する。</li>
-        <li><code>azd deploy</code>。</li>
-        <li>起動ログに <code>FABRIC_IQ_TOOLBOX_ENDPOINT が未設定</code> の警告が<b>出ていない</b>ことを確認する。</li>
+        <li>azd が無ければ入れる（PowerShell）：<code>winget install --id Microsoft.Azd -e</code>。<b>新しいシェルを開き直さないと PATH に出てこない</b>。</li>
+        <li><code>azd config set auth.useAzCliAuth true</code>（<code>az login</code> の資格情報を使う）、<code>azd extension install azure.ai.agents</code>（<code>host: azure.ai.agent</code> に必要）。</li>
+        <li><code>azd env new &lt;環境名&gt; --subscription &lt;SUB_ID&gt; --location japaneast --no-prompt</code></li>
+        <li>§6 の対応表に沿って <code>azd env set</code> をすべて実行する。<b>加えて azd 自身が要求する次の2つも入れる</b>：<code>AZURE_AI_PROJECT_ID</code>（プロジェクトの ARM リソース ID）、<code>FOUNDRY_PROJECT_ENDPOINT</code>（プロジェクトのエンドポイント）。</li>
+        <li><code>azd env list</code> で環境を再確認して <code>azd deploy --no-prompt</code>（新テナントで約3分）。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd>デプロイ成功後、<code>python client_test_responses_session.py &lt;agent_session_id&gt;</code> で応答が返る。</dd>
-      <dt>落とし穴</dt><dd><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> が未設定だと、<b>エラーにならず Fabric IQ 抜きで起動する</b>（警告ログのみ）。デモ中に「オントロジーの質問だけ答えが薄い」という形で出る。<br><span class="path">requirements.txt</span> は検証済みバージョンに固定してある。<code>&gt;=</code> に緩めない。</dd>
+      <dt>確認方法</dt><dd>出力の最後に Responses / Invocations のエンドポイントが出る。運用者の資格情報（scope <code>https://ai.azure.com/.default</code>）で Responses に「製品A001の品質基準について教えて」を POST し、<code>search_documents_tool</code> が呼ばれて回答が返る。<br>ポータルの <span class="path">ビルド &gt; エージェント</span> で状態が「実行中」になる。<br>ログは <code>azd ai agent sessions list &lt;agent&gt;</code> でセッションIDを取り、<code>azd ai agent monitor &lt;agent&gt; --session-id &lt;id&gt; --tail 300</code>。</dd>
+      <dt>落とし穴</dt><dd><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> が未設定だと、<b>エラーにならず Fabric IQ 抜きで起動する</b>（警告ログのみ）。デモ中に「オントロジーの質問だけ答えが薄い」という形で出る。<br><span class="path">requirements.txt</span> は検証済みバージョンに固定してある。<code>&gt;=</code> に緩めない。<br>
+        <b>変数が足りないと1つずつしか教えてくれない。</b>新テナントでは1回目 <code>AZURE_AI_PROJECT_ID is not set</code>、2回目 <code>FOUNDRY_PROJECT_ENDPOINT is not set</code> で止まった（<span class="path">azure.yaml</span> の <code>endpoint: ${AI_FOUNDRY_PROJECT_ENDPOINT}</code> とは別に要求される）。<br>
+        <b>リポジトリ直下に置いた大きなファイルはリモートビルドにアップロードされる。</b><span class="path">.agentignore</span> で除外する（<code>*.msi</code> などを追加した）。<br>
+        <b>チャットモデルの容量が小さいと、Fabric IQ を足した途端にレート制限で失敗する。</b>ツール定義がプロンプトに乗るため。Bicep の既定だった容量 1（1,000 TPM）では足りず、50 に上げた（Standard は従量課金なので容量を上げても固定費は増えない）。</dd>
     </dl>
   </div>
 
@@ -859,6 +874,8 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td><code>AI_FOUNDRY_MODEL</code></td><td>チャットモデルのデプロイ名</td><td>Foundry ポータルのデプロイ一覧</td><td>両方</td></tr>
         <tr><td><code>AZURE_AI_MODEL_DEPLOYMENT_NAME</code></td><td>同上（azd 側が使う名前）</td><td>同上</td><td>azd env</td></tr>
         <tr><td><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code></td><td>Toolbox の MCP エンドポイント</td><td>5-4 の出力</td><td>azd env</td></tr>
+        <tr><td><code>AZURE_AI_PROJECT_ID</code></td><td>Foundry プロジェクトの ARM リソース ID（azd が要求）</td><td><code>/subscriptions/.../accounts/&lt;account&gt;/projects/&lt;project&gt;</code></td><td>azd env</td></tr>
+        <tr><td><code>FOUNDRY_PROJECT_ENDPOINT</code></td><td>プロジェクトのエンドポイント（azd が要求。<code>AI_FOUNDRY_PROJECT_ENDPOINT</code> と同じ値）</td><td>同上</td><td>azd env</td></tr>
         <tr><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td><td>Foundry の Fabric IQ 接続ID</td><td>5-3</td><td>.env</td></tr>
         <tr><td><code>FABRIC_IQ_ONTOLOGY_WORKSPACE_ID</code></td><td>オントロジーのワークスペースID</td><td>4-3 の URL</td><td>.env</td></tr>
         <tr><td><code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code></td><td>オントロジーのアイテムID</td><td>4-3 の URL</td><td>.env</td></tr>
@@ -989,8 +1006,8 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>5</td><td>azd が <span class="path">azure.yaml</span> の <code>endpoint</code> で <code>${}</code> を展開するか</td><td><code>azd deploy</code> を実行し、プロジェクト解決でこけないか見る。こけたら実値を直書きする</td><td><a href="#s5-2">5-2</a></td></tr>
         <tr><td>6</td><td>新テナント／選んだリージョンで Foundry に「Fabric IQ」接続タイプが出るか</td><td>Foundry ポータルの New connection の一覧を見る</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>7</td><td>Fabric IQ が本当に「Foundry の呼び出し元」＝サインインした本人として動くか</td><td><code>FOUNDRY_CALL_AS=user</code> で、品質チーム未所属のユーザーに限定データが返らないことを確認する</td><td><a href="#s7-3">7-3</a></td></tr>
-        <tr><td>8</td><td>Fabric IQ の MCP サーバーが公開するツール名と、Responses の <code>output</code> 上での表現</td><td>「処理詳細を見る」に出るツール名を記録する（デモUIは既存2ツール以外をすべて Fabric IQ とみなしている）</td><td><a href="#s7-4">7-4</a></td></tr>
-        <tr><td>9</td><td><code>function_call_output</code> が Responses の <code>output</code> に含まれるか</td><td>含まれない場合、「閲覧できなかった情報」の表示は出ない。回答文での明示だけで足りるかを判断する</td><td><a href="#s7-3">7-3</a></td></tr>
+        <tr><td>8</td><td>Fabric IQ の MCP サーバーが公開するツール名と、Responses の <code>output</code> 上での表現<br><b>→ 確定。</b><code>fabric_iq_ontology___list_ontology_entity_types</code> と <code>fabric_iq_ontology___search_ontology</code>（自然文を渡す）の2つ。<code>output</code> には通常の <code>function_call</code> として現れる</td><td>「処理詳細を見る」に出るツール名を記録する（デモUIは既存2ツール以外をすべて Fabric IQ とみなしている）</td><td><a href="#s7-4">7-4</a></td></tr>
+        <tr><td>9</td><td><code>function_call_output</code> が Responses の <code>output</code> に含まれるか<br><b>→ 含まれる</b>（デプロイ後に実機で確認）。デモUIの「閲覧できなかった情報」表示は機能する</td><td>含まれない場合、「閲覧できなかった情報」の表示は出ない。回答文での明示だけで足りるかを判断する</td><td><a href="#s7-3">7-3</a></td></tr>
         <tr><td>10</td><td>Fabric IQ 経由の応答時間（同期実行でタイムアウトに縛られる）</td><td>横断質問を10回程度送って所要時間を測る。デモUIのタイムアウトは 180 秒</td><td><a href="#s7-3">7-3</a></td></tr>
         <tr><td>11</td><td><code>_PerToolCallLimitMiddleware</code> が Toolbox 経由の MCP ツール呼び出しにも効くか</td><td>同じ Fabric IQ ツールを3回以上呼ばせる質問を投げ、3回目が <code>tool_call_limit_exceeded</code> になるか見る</td><td><a href="#s5-5">5-5</a></td></tr>
         <tr><td>12</td><td>Invocations 経由の <code>session_id</code> / <code>user_id</code> が Responses 側と一致するか</td><td><code>client_register_obo.py</code> の出力と、Responses 側のログを突き合わせる</td><td><a href="#s7-1">7-1</a></td></tr>
@@ -1003,6 +1020,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>19</td><td>同じエッジテーブルを2つのリレーションで共用できるか</td><td><code>edge_document_product</code> を公開用・限定用の2リレーションで共用している。リフレッシュ後、それぞれの文書エンティティから正しい製品だけを辿れるかを確認する</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>20</td><td>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>21</td><td>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
+        <tr><td>22</td><td><b>Fabric IQ の自然文検索が失敗する</b>（<code>Failed to translate NL query to ontology query.</code>）。日本リージョンで AI の国外処理設定が要るか</td><td>2026-09-21、テナント設定「…外部で処理できます」をオンにして反映待ち。オンにした後に Toolbox の MCP エンドポイントへ直接 <code>tools/call</code> を投げて確かめる。<b>試用容量・F2 のどちらでも失敗した</b>ので容量の種類は原因ではない。GraphModel のスキーマとバインドも正常だった</td><td><a href="#s2-3">2-3</a></td></tr>
       </tbody>
     </table>
   </div>

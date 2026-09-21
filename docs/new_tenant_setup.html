@@ -700,7 +700,16 @@ Entity type names must be unique within a namespace.</pre>
         「Which product_group does the product with product_id A005 belong to?」のように<b>英語でスキーマの名前を使う</b>と通る
         （日本語でもスキーマの名前を混ぜれば通った）。エージェント側は <span class="path">main.py</span> の <code>AGENT_INSTRUCTIONS</code> で
         「英語・スキーマの名前で問い合わせる」よう指示している。より根本的には、エンティティとリレーションの<b>説明欄に日本語の同義語</b>を書く【要確認：効果は未検証】。<br>
-        なお一覧系の質問（「List all product entities」）は1分近くかかることがある。
+        なお一覧系の質問（「List all product entities」）は1分近くかかることがある。<br>
+
+        <b>⑩ Fabric IQ をエージェントから安定して使うための3つの決まり</b>（実機で確認。<span class="path">main.py</span> の <code>AGENT_INSTRUCTIONS</code> に反映済み）
+        <ul style="margin:6px 0 0;padding-left:20px;">
+          <li><b>並列に呼ばない。1回の質問にまとめる。</b>エージェントが <code>search_ontology</code> を2回同時に呼ぶと、片方が <code>Function failed</code> になった（2回とも）。
+            「For the product with product_id A005, follow belongs_to_product_group to product_group and follow produced_at_site to site. Return …」のように1回にまとめると、製品・商品群・拠点が1行で返り、3回中3回成功した。</li>
+          <li><b>関係は動詞でなくリレーション名で書く。</b>「Which site <u>produces</u> …」は失敗、「… <u>via produced_at_site</u>」は成功。</li>
+          <li><b><code>naturalLanguageResponse</code> は <code>false</code>。</b>結果を文章に要約する処理がときどき <code>naturalLanguageResponseError: 403 (Forbidden)</code> を返す。データ（<code>raw.Fields</code> / <code>raw.Value</code>）は取れているのに、エージェントがこの「403」を見て<b>「閲覧権限が無い」と誤答</b>した。</li>
+        </ul>
+        あわせて「取得できなかった項目を推測で埋めない」と指示している。指示が無いと、商品群の取得に失敗したときに<b>製品名（熱交換器β）を商品群名として答えた</b>。
       </dd>
     </dl>
   </div>

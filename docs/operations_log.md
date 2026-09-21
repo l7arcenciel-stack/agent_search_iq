@@ -427,6 +427,16 @@ Accept: application/json, text/event-stream
 - エージェントが最初に Fabric IQ へ渡していた質問も「製品ID A005の商品群名称を教えてください」で、まさに失敗パターンだった。
 - 対処: `main.py` の `AGENT_INSTRUCTIONS` に「search_ontology には英語でスキーマの名前を使って問い合わせる」
   指示とスキーマの一覧・例文を追加して再デプロイ。
+
+### 16-2. 再デプロイ後の確認と、試用容量の制約
+
+- 再デプロイ後（試用容量上）、エージェントに日本語で「製品A005はどの商品群に属し、どの拠点で生産されていますか」と聞くと、
+  エージェントは **「Which product_group does the product with product_id A005 belong to? Return the product_group name.」**
+  と英語・スキーマ名の質問を組み立てた（指示の変更は効いた）。
+- しかし結果は `Error: Function failed.`。**F2 で成功したのと同じ質問を試用容量で MCP に直接投げると、約2秒で
+  `Failed to translate NL query to ontology query.`**。
+- 結論: **試用容量では Fabric IQ の自然文検索（AI）は動かない**。構築・閲覧・DAX・エンティティ一覧は動く。
+  Fabric IQ を使う確認とデモ本番は F2 に付け替えて行う。
 - 「Microsoft サブプロセッサーとしての OpenAI」の2設定は必須一覧に無いため、有効化していない。
 - 元テナントでは**国外処理と国外保存**の両方が要るため、データ所在地の社内承認が必要になる見込み（元テナント手順書の依頼 #8）。
 
@@ -434,7 +444,6 @@ Accept: application/json, text/event-stream
 
 ## 未完了（2026-09-21 時点）
 
-- 指示変更後のエージェント経由での確認（Fabric IQ を使う質問）
-- 試用容量で AI 機能（自然文検索）が動くかの確認
+- F2 上でのエージェント経由の確認（Fabric IQ を使う質問）
 - 2人での比較（デモ UI）
 - 不要だったアプリ登録②の削除

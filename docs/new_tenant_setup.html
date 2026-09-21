@@ -246,6 +246,18 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
     <p>同じことが <code>azd</code> にも当てはまる。<code>azd deploy</code> の前には必ず <code>azd env list</code> で選択中の環境を確認する。</p>
   </div>
 
+  <div class="callout info">
+    <b>API / CLI でできる部分はスクリプト化してある</b>
+    <p>Entra（グループ・ユーザー・アプリ登録と管理者同意）、Fabric のアイテム、Foundry のロールは <span class="path">tenant_setup/</span>、Fabric のテーブル・モデル・オントロジー定義は <span class="path">fabric_notebooks/</span>。すべて <code>--dry-run</code> 付きで冪等。実行順は <span class="path">tenant_setup/README.md</span>。この手順書の各ステップは、それらを<b>ポータルで手作業する場合</b>の説明も兼ねている。新テナントで実際に叩いたコマンドと結果は <span class="path">docs/operations_log.md</span>。</p>
+  </div>
+
+  <div class="callout info">
+    <b>作業を再開するときは、まず状況点検スクリプトを流す</b>
+    <pre>python fabric_notebooks/00_check_status.py</pre>
+    <p>読み取りだけを行い、<b>テナント・容量・ワークスペース・レイクハウス・セマンティックモデル・オントロジー・グループ・テストユーザー</b>の状態と、<b>次にやること</b>、<b>現在の環境変数の値</b>を表示する。ID をファイルに持たない方針なので、値はここから拾う。</p>
+    <p><b>コスト節約で容量を止める運用に注意。</b>容量が停止していると、アイテムの一覧は取れるのに中身（テーブル一覧、オントロジー定義など）だけが 404 になる。スクリプトはワークスペースが実際に載っている容量の状態を最初に確認する。F2 を止めて<b>試用容量に付け替える</b>こともでき、今回の構成（レイクハウス・Direct Lake モデル・オントロジー）は試用容量でも動いた（§8 #1）。付け替えても F2 は自動で止まらないので、手動で停止する。</p>
+  </div>
+
   <h3>全体の依存関係（この順でしか進めない）</h3>
   <div class="dep">
     <div class="dep-row"><span class="dep-tag">2</span><div class="dep-body"><div class="dep-title">Fabric 容量・リージョン・テナント設定</div><div class="dep-note">ここが無いとワークスペースもオントロジーも作れない。リージョンを間違えると Fabric IQ 自体が出てこない。</div></div></div>
@@ -400,7 +412,10 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li>全社員グループには、テストユーザー2人とも入れる。品質チームグループには片方だけ入れる。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>各グループの「メンバー」に想定どおりのユーザーが入っている。グループ概要ページの URL とプロパティにオブジェクトID が表示される。</dd>
-      <dt>落とし穴</dt><dd><b>動的グループにしない。</b>メンバーシップの反映に時間差が出て、デモ直前に「なぜか片方に見えない」が起きる。割り当て済み（Assigned）にする。<br>Graph の <code>GroupMember.Read.All</code> で解決されるのは<b>グループの GUID</b>であり表示名ではない。環境変数には必ず GUID を入れる。</dd>
+      <dt>落とし穴</dt><dd><b>動的グループにしない。</b>メンバーシップの反映に時間差が出て、デモ直前に「なぜか片方に見えない」が起きる。割り当て済み（Assigned）にする。<br>Graph の <code>GroupMember.Read.All</code> で解決されるのは<b>グループの GUID</b>であり表示名ではない。環境変数には必ず GUID を入れる。<br>
+        <b>既定で存在する「All Company」は使わない。</b>Microsoft 365 グループ（<code>securityEnabled=false</code>）なので、ACL やレイクハウスの権限付与には専用のセキュリティグループを作る。<br>
+        <b>CLI で作る場合の注意</b>：新テナントは<b>セキュリティ既定値</b>が有効で、Graph への非対話アクセスが <code>AADSTS530035</code> でブロックされる。一度だけ
+        <code>az login --tenant &lt;TENANT_ID&gt; --scope "https://graph.microsoft.com//.default"</code> を実行し、MFA を通してから操作する。</dd>
     </dl>
   </div>
 
@@ -412,16 +427,19 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <dt>手順</dt><dd><ol>
         <li>ユーザーA（品質チーム所属）とユーザーB（未所属）を作る。表示名は画面に出るので、デモで見分けがつく名前にする。</li>
         <li>3-1 のグループに割り当てる（A: 全社員＋品質チーム／B: 全社員のみ）。</li>
-        <li>Fabric / Power BI のライセンスを割り当てる（2-2 の【要確認】。F64 未満なら Power BI Pro が要る前提で用意しておく）。</li>
+        <li><b>利用場所（usageLocation）を設定してから</b>、ライセンスを割り当てる。新テナントでは <b>Power BI（無料）</b>＝<code>POWER_BI_STANDARD</code> が実質無制限にあり、<b>これだけで Fabric へのサインインとオントロジーの閲覧ができた</b>。Pro の要否は 2-2 の【要確認】。</li>
         <li>初回サインインを済ませ、パスワード変更・MFA 登録を完了させておく。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>2人ともブラウザで <code>https://app.fabric.microsoft.com</code> にサインインでき、ライセンスエラーが出ない。</dd>
-      <dt>落とし穴</dt><dd><b>デモ本番当日に初回サインインをやらせない。</b>パスワード変更と MFA 登録の画面が挟まって確実に時間を食う。事前に済ませる。</dd>
+      <dt>落とし穴</dt><dd><b>デモ本番当日に初回サインインをやらせない。</b>パスワード変更と MFA 登録の画面が挟まって確実に時間を食う。<b>セキュリティ既定値が有効なテナントでは MFA が必須</b>なので、Authenticator を2アカウント分登録する準備も要る。<br>
+        <b>利用場所が未設定だとライセンス割り当てが失敗する</b>（<code>invalid usage location</code>）。設定直後も反映待ちで失敗することがあるので、数十秒おいて再試行する。<br>
+        テナントが持っている <code>POWER_BI_STANDARD</code> は <b>Power BI Pro ではなく無料版</b>。ポータル右上の「Power BI 試用版 残り◯日」は別枠の個人試用で、購読ライセンスとしては出てこない。<br>
+        パスワードをメールで受け取る手段が無いので、作成時に決めた値を安全な場所に控える（リポジトリには置かない）。</dd>
     </dl>
   </div>
 
   <div class="step" id="s3-3">
-    <label class="step-head"><input type="checkbox"><span class="step-no">3-3</span><span class="step-title">アプリ登録①（OBO 用）を作る</span><span class="badge b-tbd">要確認</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">3-3</span><span class="step-title">アプリ登録①（OBO 用）を作る</span><span class="badge b-ok">確認済</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>デモUIでのユーザーサインインと、On-Behalf-Of によるトークン交換（Graph でのグループ解決／Power BI での RLS）に使う。</dd>
       <dt>どこで</dt><dd>Entra 管理センター <span class="path">ID &gt; アプリケーション &gt; アプリの登録 &gt; 新規登録</span></dd>
@@ -431,12 +449,12 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li><span class="path">API の公開</span> でスコープ <code>access_as_user</code> を追加する。アプリケーション ID の URI は既定の <code>api://&lt;CLIENT_ID&gt;</code> のままでよい。</li>
         <li><span class="path">API のアクセス許可</span> に委任のアクセス許可を追加する：
           <ul>
-            <li>Microsoft Graph → <code>GroupMember.Read.All</code></li>
+            <li>Microsoft Graph → <code>GroupMember.Read.All</code>、<code>User.Read</code></li>
             <li>Power BI Service → <code>Dataset.Read.All</code></li>
-            <li><b>【要確認】</b><code>https://ai.azure.com</code> 向けの委任権限（デモUIの <code>FOUNDRY_CALL_AS=user</code> 用）。「所属する組織で使用している API」タブで該当リソースを探して追加する。具体的な API 表示名・スコープ名はテナントで実際に見て確定させる。</li>
+            <li><b>Azure Machine Learning Services</b> → <code>user_impersonation</code>。これが <code>https://ai.azure.com</code> の実体（appId <code>18a66f5f-dbdf-4c17-9dd7-1634712a9cbe</code>）。デモUIの <code>FOUNDRY_CALL_AS=user</code> で本人のトークンを取るのに使う。「所属する組織で使用している API」タブで名前を検索する</li>
           </ul>
         </li>
-        <li><b>管理者の同意を与える</b>（自分が Global Administrator なのでその場でできる）。</li>
+        <li><b>管理者の同意を与える</b>（自分が Global Administrator なのでその場でできる）。<b>自分自身の <code>access_as_user</code> にも同意が要る</b>（デモUIが自アプリの API のトークンを取るため）。</li>
         <li><span class="path">証明書とシークレット</span> でクライアントシークレットを作り、<b>値を安全な場所に保管する</b>（画面を離れると二度と見られない）。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>アクセス許可の一覧で、追加したすべての権限の状態が「&lt;テナント名&gt; に付与されました」の緑チェックになっている。<br>実地確認としては、5-5 の後に <code>streamlit run demo_chat_iq.py</code> でサインインが通ること。</dd>
@@ -445,7 +463,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
   </div>
 
   <div class="step" id="s3-4">
-    <label class="step-head"><input type="checkbox"><span class="step-no">3-4</span><span class="step-title">アプリ登録②（Fabric IQ 接続用）を、①とは別に作る</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">3-4</span><span class="step-title"><s>アプリ登録②（Fabric IQ 接続用）を、①とは別に作る</s> → 不要だった（5-3 参照）</span><span class="badge b-ok">確認済</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>Foundry の「Fabric IQ」接続が Fabric のオントロジーエンドポイントを叩くための資格情報。</dd>
       <dt>どこで</dt><dd>Entra 管理センター <span class="path">ID &gt; アプリケーション &gt; アプリの登録 &gt; 新規登録</span></dd>
@@ -467,12 +485,16 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <dt>目的</dt><dd>テストユーザーがエージェントを呼べるようにし、自分が Foundry で接続を作れるようにする。</dd>
       <dt>どこで</dt><dd>Azure ポータル／Foundry ポータル <span class="path">Foundry プロジェクト &gt; アクセス制御 (IAM) &gt; ロールの割り当ての追加</span></dd>
       <dt>手順</dt><dd><ol>
-        <li>テストユーザー2人に、エージェントを呼び出せるロール（<b>Foundry User</b> 相当。実体は <code>.../applications/invoke/action</code> を含むロール）を割り当てる。</li>
-        <li>接続を作る自分自身に <b>Foundry Project Manager</b> を割り当てる。</li>
+        <li><b>全社員グループ</b>に <b>Foundry Agent Consumer</b> を割り当てる（スコープはプロジェクト）。エージェントのエンドポイント呼び出し（<code>Microsoft.CognitiveServices/accounts/AIServices/endpoints/interact/action</code>）だけを持つ最小権限のロール。個人ではなくグループに付けておくと、元テナントでも同じ形で依頼できる。</li>
+        <li>自分自身に <b>Foundry Project Manager</b> を割り当てる（ツール／Toolbox の作成、エージェントのデプロイ用）。</li>
         <li>反映まで数分かかることがある。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd>7-1 でテストユーザーが質問を送って 403 が返らない。</dd>
-      <dt>落とし穴</dt><dd>ロールが無いと <b>403</b> で止まる。これはエラーが出るので気づける。むしろ、デモUI側が 403 を「接続が切れました」と表示するため、原因を取り違えやすい点に注意。</dd>
+      <dt>確認方法</dt><dd><code>az role assignment list --scope &lt;project の ID&gt;</code> に2件並ぶ。実地確認は 7-1 でテストユーザーが質問を送って 403 が返らないこと。</dd>
+      <dt>落とし穴</dt><dd><b>ロール名が変わっている。</b>旧「Azure AI User」「Azure AI Project Manager」は見つからず、<b>「Foundry User」「Foundry Project Manager」「Foundry Agent Consumer」</b>などになっていた。名前で探して見つからなければ <code>az role definition list --query "[?contains(roleName,'Foundry')].roleName"</code> で確認する。<br>
+        <b>サブスクリプションの Owner でも Toolbox は作れない。</b>Owner はコントロールプレーンの権限で、Toolbox 作成などのデータ操作（dataActions）を含まない。自分にも Foundry 系ロールを付ける。<br>
+        <b>Foundry Agent Consumer で Invocations プロトコル（OBO 登録）まで通るかは【要確認】</b>。403 になったら <b>Foundry User</b> に上げる。<br>
+        ロールが無いと <b>403</b> で止まる。デモUI側は 403 を「接続が切れました」と表示するため、原因を取り違えやすい。<br>
+        Git Bash から <code>az role assignment create --scope /subscriptions/...</code> を打つと、<code>/subscriptions</code> が Windows パスに変換されて <code>MissingSubscription</code> になる。<code>export MSYS_NO_PATHCONV=1</code> を先に実行する。</dd>
     </dl>
   </div>
 
@@ -650,12 +672,12 @@ Entity type names must be unique within a namespace.</pre>
         スクリプトは <code>spark.conf.get("trident.lakehouse.name")</code> で
         アタッチ先を読み、<code>TARGET</code> と一致しなければ1行も書かずに停止する。<br>
 
-        <b>⑧ アイテム個別のサブリソース API が 404 を返すことがある。</b>
-        <code>/lakehouses/&lt;id&gt;/tables</code> や <code>/ontologies/&lt;id&gt;/getDefinition</code> が、
-        直前まで取得できていたのに突然 404 になる事象を確認した
-        （Graph 向けに <code>az login --scope</code> した後に発生）。
-        <code>az login --tenant &lt;TENANT_ID&gt;</code> で入り直すか、ポータルで目視確認する。
-        <b>404 を「0件」と解釈しないこと。</b>
+        <b>⑧ 容量が停止（Paused）していると、アイテム個別の API だけが 404 を返す。</b>
+        ワークスペースやアイテムの一覧は取れるのに、<code>/lakehouses/&lt;id&gt;/tables</code> や
+        <code>/ontologies/&lt;id&gt;/getDefinition</code> だけが 404 になる。
+        コスト節約で容量を止めた翌日に踏みやすい。当初トークンの問題と誤診したが、原因は容量停止だった。
+        <b>404 を「0件」「データ消失」「権限なし」と解釈する前に、容量の状態を確認すること。</b>
+        <span class="path">00_check_status.py</span> は最初に容量状態を確認する。
       </dd>
     </dl>
   </div>
@@ -666,11 +688,13 @@ Entity type names must be unique within a namespace.</pre>
       <dt>目的</dt><dd>テストユーザーが Fabric IQ 経由でオントロジーを引けるようにする。</dd>
       <dt>どこで</dt><dd>Fabric ポータル、オントロジー／レイクハウスの <span class="path">…（その他のオプション） &gt; アクセス許可の管理</span></dd>
       <dt>手順</dt><dd><ol>
-        <li>オントロジーへの<b>読み取り</b>を2人（またはグループ）に付与する。</li>
-        <li>裏のソース（レイクハウス／セマンティックモデル）への<b>読み取り</b>も付与する。両方必要。</li>
-        <li>閲覧範囲を分けたテーブル（4-1）については、<b>品質チーム限定のテーブルには品質チームグループだけ</b>を付与する。</li>
-      </ol></dd>
-      <dt>確認方法</dt><dd>ワークスペースへのアクセスを与えていなくても、アイテム単位の読み取りだけで参照できる（データエージェント共有の仕様どおり）。</dd>
+        <li><b>オントロジー</b>への読み取りを <b>全社員グループ</b>に付与する（品質チームのメンバーも全社員グループに入っているので、これで2人とも届く）。</li>
+        <li><b><code>lh_public</code></b> への読み取りを <b>全社員グループ</b>に付与する。</li>
+        <li><b><code>lh_restricted</code></b> への読み取りを <b>品質チームグループだけ</b>に付与する。</li>
+        <li>レイクハウスの共有では<b>「すべての SQL エンドポイント データを読み取る」と「すべての Apache Spark を読み取り…」にチェック</b>を入れる。「受信者にメールで通知する」は外す。</li>
+      </ol>
+      <b>権限はテーブル単位ではなくレイクハウス単位でしか切れない</b>（4-1 の注意枠）。テーブルに個別の権限を付ける画面は無い。</dd>
+      <dt>確認方法</dt><dd>ワークスペースへのアクセスを与えていなくても、アイテム単位の読み取りだけで参照できる。詳細な確認手順は 4-6。</dd>
       <dt>落とし穴</dt><dd>権限が足りない場合、Fabric IQ は「データがありません」に近い応答を返すことがある。<b>「権限が無い」と「データが無い」を取り違えない。</b><span class="path">main.py</span> の AGENT_INSTRUCTIONS はこの区別を明示するよう指示している。</dd>
     </dl>
   </div>
@@ -750,18 +774,22 @@ azd env list                               # ★選択中(*)の環境を確認</
   </div>
 
   <div class="step" id="s5-3">
-    <label class="step-head"><input type="checkbox"><span class="step-no">5-3</span><span class="step-title">Foundry で Fabric IQ 接続を作る</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">5-3</span><span class="step-title">Foundry で Fabric IQ ツール（接続）を作る</span><span class="badge b-ok">確認済</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>Foundry から Fabric のオントロジーエンドポイントへ到達できるようにする。</dd>
-      <dt>どこで</dt><dd>Foundry ポータル <span class="path">Settings &gt; Connections &gt; New connection &gt; Fabric IQ</span></dd>
+      <dt>どこで</dt><dd>Foundry ポータル（新しい Foundry）<span class="path">ビルド &gt; ツール</span> のカタログ。<b>「接続」画面ではない。</b></dd>
       <dt>手順</dt><dd><ol>
-        <li>接続の種類で <b>Fabric IQ</b> を選ぶ。</li>
-        <li>3-4 のアプリ登録②のクライアントID・シークレット・テナントIDを入力する。</li>
-        <li>画面に表示されるリダイレクト URI を、3-4 のアプリ登録②の<span class="path">認証</span>に登録する（往復になる）。</li>
-        <li>作成された<b>接続 ID</b> を控える（<code>FABRIC_IQ_PROJECT_CONNECTION_ID</code>）。</li>
+        <li><span class="path">ビルド &gt; ツール</span> で <b>Fabric IQ</b> を選び、ツールを作成する。</li>
+        <li>リモート MCP サーバー エンドポイントに、オントロジーの MCP URL を入れる：<br><code>https://api.fabric.microsoft.com/v1/mcp/dataPlane/workspaces/&lt;ws&gt;/items/&lt;ontology&gt;/ontologyEndpoint</code></li>
+        <li>認証は <b>「OAuth ID パススルー」</b>（既定）のままにする。<b>クライアントID・シークレット・リダイレクト URI の入力は無い。</b></li>
+        <li>詳細画面に出る<b>「プロジェクト接続 ID」</b>（<code>/subscriptions/.../projects/&lt;project&gt;/connections/&lt;name&gt;</code>）を控える（<code>FABRIC_IQ_PROJECT_CONNECTION_ID</code>）。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd>接続一覧に表示され、状態がエラーになっていない。</dd>
-      <dt>落とし穴</dt><dd><b>【要確認】</b>新テナント／選んだリージョンで「Fabric IQ」という接続タイプが選択肢に出るか。出ない場合は 2-1 のリージョン選択か 2-3 のテナント設定を疑う。<br>接続を作るには自分に <b>Foundry Project Manager</b> が要る（3-5）。</dd>
+      <dt>確認方法</dt><dd>ARM で接続を読むと <code>category: RemoteTool</code> / <code>authType: UserEntraToken</code> / <code>audience: https://api.fabric.microsoft.com</code> / <code>metadata.type: fabric_iq_preview</code> になっている。</dd>
+      <dt>落とし穴</dt><dd>
+        <b>① 接続一覧の「Microsoft Fabric（プレビュー）」は別物。</b>あれはデータエージェント用（<code>workspace-id</code> / <code>artifact-id</code> を入れるカスタムキー方式）で、Fabric IQ には使えない。<br>
+        <b>② 独自の OAuth アプリ（3-4 のアプリ登録②）は不要だった。</b>認証方式 <code>UserEntraToken</code> は、<b>呼び出した本人の Entra トークンを Fabric にそのまま渡す</b>。つまり Fabric IQ は本人の権限で動き、レイクハウス分割の権限分離がそのまま効く。これは「フロントが本人のトークンで Foundry を呼ぶ」（<code>FOUNDRY_CALL_AS=user</code>）ことが前提。<br>
+        <b>③ 作成直後の接続は <code>isSharedToAll: false</code>。</b>作成者以外のユーザーが使えない可能性がある【要確認】。テストユーザーで失敗したらまずここを疑う。<br>
+        作成には自分に <b>Foundry Project Manager</b> が要る（3-5）。</dd>
     </dl>
   </div>
 
@@ -770,13 +798,20 @@ azd env list                               # ★選択中(*)の環境を確認</
     <dl class="step-body">
       <dt>目的</dt><dd>エージェントが MCP 経由で Fabric IQ を呼べるエンドポイントを得る。</dd>
       <dt>どこで</dt><dd>手元の PC（<code>az login</code> 済み）、<span class="path">setup_toolbox.py</span></dd>
-      <dt>手順</dt><dd><pre>$env:FABRIC_IQ_PROJECT_CONNECTION_ID   = "&lt;5-3 の接続ID&gt;"
-$env:FABRIC_IQ_ONTOLOGY_WORKSPACE_ID   = "&lt;4-3 のワークスペースID&gt;"
-$env:FABRIC_IQ_ONTOLOGY_ITEM_ID        = "&lt;4-3 のオントロジーアイテムID&gt;"
-python setup_toolbox.py</pre>
-      出力された MCP エンドポイントを控える。</dd>
+      <dt>手順</dt><dd><pre>python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt   # 初回のみ
+$env:AI_FOUNDRY_PROJECT_ENDPOINT      = "https://&lt;account&gt;.services.ai.azure.com/api/projects/&lt;project&gt;"
+$env:FABRIC_IQ_PROJECT_CONNECTION_ID  = "/subscriptions/.../projects/&lt;project&gt;/connections/&lt;name&gt;"
+$env:FABRIC_IQ_ONTOLOGY_WORKSPACE_ID  = "&lt;4-3 のワークスペースID&gt;"
+$env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテムID&gt;"
+.\.venv\Scripts\python setup_toolbox.py</pre>
+      出力された MCP エンドポイントを控える（<code>.../toolboxes/&lt;name&gt;/versions/&lt;v&gt;/mcp?api-version=v1</code>）。</dd>
       <dt>確認方法</dt><dd>「作成しました。」に続いて Toolbox 名・バージョン・MCP エンドポイントが表示される。</dd>
-      <dt>落とし穴</dt><dd><b>同じ名前で再実行すると新しいバージョンが作られ、エンドポイントのバージョン番号も変わる。</b>作り直したら <code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> を更新して再デプロイしないと、エージェントは古いバージョンを見続ける。<br>このスクリプトは <code>AI_FOUNDRY_PROJECT_ENDPOINT</code> を <span class="path">common.py</span> 経由で読むので、<span class="path">.env</span> 側にも値が要る。</dd>
+      <dt>落とし穴</dt><dd><b>同じ名前で再実行すると新しいバージョンが作られ、エンドポイントのバージョン番号も変わる。</b>作り直したら <code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> を更新して再デプロイしないと、エージェントは古いバージョンを見続ける。<br>
+        <b><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code> は接続名ではなく ARM のフルパス</b>。5-3 のツール詳細画面の「プロジェクト接続 ID」をそのままコピーする。<br>
+        <b>SDK（azure-ai-projects）が要る</b>ので仮想環境に <span class="path">requirements.txt</span> を入れてから実行する。<br>
+        <span class="path">common.py</span> は import 時に AI Search や Azure OpenAI の環境変数も必須で読む。Toolbox 作成だけなら<b>それらはダミー値でも動く</b>（使われない）。<br>
+        プロジェクトのエンドポイントは Bicep 出力の <code>...cognitiveservices.azure.com/...</code> 形式ではなく、<b><code>...services.ai.azure.com/api/projects/&lt;project&gt;</code> 形式</b>で渡した（こちらで作成に成功）。</dd>
     </dl>
   </div>
 
@@ -811,7 +846,7 @@ python setup_toolbox.py</pre>
         <tr><td><code>QUALITY_TEAM_GROUP_ID</code></td><td>品質チームグループの Object ID</td><td>3-1 のグループ概要</td><td>両方</td></tr>
         <tr><td><code>ALL_EMPLOYEES_GROUP_ID</code></td><td>全社員グループの Object ID（<b>今回から実グループ</b>）</td><td>3-1 のグループ概要</td><td>両方</td></tr>
         <tr><td><code>CURRENT_USER_GROUPS</code></td><td>OBO 未登録時のフォールバック。通常は全社員グループの GUID</td><td>3-1 と同じ値</td><td>両方</td></tr>
-        <tr><td><code>FABRIC_WORKSPACE_ID</code></td><td>セマンティックモデルのあるワークスペース</td><td>4-2 の URL</td><td>両方</td></tr>
+        <tr><td><code>FABRIC_WORKSPACE_ID</code></td><td>セマンティックモデルのあるワークスペース</td><td>4-2 の URL。<b><span class="path">fabric_notebooks/00_check_status.py</span> を実行すると、この表の Fabric / Entra 系の値がまとめて表示される</b></td><td>両方</td></tr>
         <tr><td><code>FABRIC_DATASET_ID</code></td><td>セマンティックモデルのID</td><td>4-2 の URL</td><td>両方</td></tr>
         <tr><td><code>AZURE_SEARCH_ENDPOINT</code></td><td>AI Search のエンドポイント</td><td>2-4 の Bicep 出力</td><td>両方</td></tr>
         <tr><td><code>AZURE_SEARCH_API_KEY</code></td><td>AI Search の管理キー</td><td><code>az search admin-key show</code></td><td>両方</td></tr>
@@ -827,6 +862,10 @@ python setup_toolbox.py</pre>
         <tr><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td><td>Foundry の Fabric IQ 接続ID</td><td>5-3</td><td>.env</td></tr>
         <tr><td><code>FABRIC_IQ_ONTOLOGY_WORKSPACE_ID</code></td><td>オントロジーのワークスペースID</td><td>4-3 の URL</td><td>.env</td></tr>
         <tr><td><code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code></td><td>オントロジーのアイテムID</td><td>4-3 の URL</td><td>.env</td></tr>
+        <tr><td><code>FABRIC_LAKEHOUSE_PUBLIC_ID</code></td><td><code>lh_public</code> のID（<span class="path">03</span> 用）</td><td><span class="path">00_check_status.py</span> の出力</td><td>実行時に指定</td></tr>
+        <tr><td><code>FABRIC_LAKEHOUSE_RESTRICTED_ID</code></td><td><code>lh_restricted</code> のID（<span class="path">03</span> 用）</td><td>同上</td><td>実行時に指定</td></tr>
+        <tr><td><code>FABRIC_ONTOLOGY_ID</code></td><td>オントロジーのアイテムID（<span class="path">03</span> 用。<code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code> と同じ値）</td><td>同上</td><td>実行時に指定</td></tr>
+        <tr><td><code>FABRIC_SQL_ENDPOINT</code> / <code>FABRIC_SQL_DATABASE_ID</code></td><td><code>lh_public</code> の SQL エンドポイントの接続文字列とID（<span class="path">02</span> 用）</td><td><code>GET /lakehouses/&lt;id&gt;</code> の <code>sqlEndpointProperties</code></td><td>実行時に指定</td></tr>
         <tr><td><code>FABRIC_IQ_TOOLBOX_NAME</code></td><td>Toolbox 名</td><td>5-4 で自分で決める</td><td>.env</td></tr>
         <tr><td><code>IQ_AGENT_NAME</code></td><td>Foundry 上のエージェント名</td><td><span class="path">azure.yaml</span> と一致させる</td><td>両方</td></tr>
         <tr><td><code>AGENT_DISPLAY_NAME</code></td><td><code>Agent()</code> の表示名（組織名を入れない）</td><td>自分で決める</td><td>両方</td></tr>
@@ -923,6 +962,7 @@ python setup_toolbox.py</pre>
   <div class="callout info">
     <b>決着がついたもの（2026-09-21 実機確認）</b>
     <ul style="margin:8px 0 0;padding-left:20px;">
+      <li><b>【デモの核心】レイクハウス分割による権限分離が成立した。</b>未所属ユーザーは <code>product</code> を引けて <code>quality_document_restricted</code> は 401、所属ユーザーは両方引ける。付与はグループ経由（<code>lh_public</code>→全社員、<code>lh_restricted</code>→品質チーム、オントロジー→全社員）</li>
       <li><b>テナント設定 <code>OntologyPreview</code> は既定で有効だった。</b>この新テナントでは最初から <code>True</code>。有効化の作業自体が不要なケースがある</li>
       <li><b>japaneast で Ontology (preview) が作成できる。</b>アイテムの種類の一覧に表示されることを確認（リージョンのゲートは通過）</li>
       <li><b>Foundry の接続タイプ一覧に「Fabric IQ」は無い。</b>あるのは「Microsoft Fabric（プレビュー）」のみ（→ #14 で継続）</li>
@@ -942,10 +982,10 @@ python setup_toolbox.py</pre>
     <table>
       <thead><tr><th>#</th><th>未確認の内容</th><th>確認方法</th><th>該当</th></tr></thead>
       <tbody>
-        <tr><td>1</td><td>試用（Trial）容量で Data Agent / Ontology が動くか</td><td>トライアル容量のワークスペースでオントロジーを作成・バインドしてみる。作れなければ F2 有料容量に切り替える</td><td><a href="#s2-2">2-2</a></td></tr>
+        <tr><td>1</td><td>試用（Trial）容量で Data Agent / Ontology が動くか<br><b>→ 途中経過（2026-09-21）：</b>F2 で構築したワークスペースを試用容量 <code>FTL64</code> に付け替えても、レイクハウスのテーブル・オントロジー定義の取得・<b>Direct Lake モデルへの DAX クエリ</b>は正常に動いた。オントロジーのデータ問い合わせと Fabric IQ 経由は未確認。<b>付け替えても F2 は自動で止まらない</b>ので、手動で停止すること</td><td>トライアル容量のワークスペースでオントロジーを作成・バインドしてみる。作れなければ F2 有料容量に切り替える</td><td><a href="#s2-2">2-2</a></td></tr>
         <tr><td>2</td><td>F64 未満の容量で、閲覧ユーザーに Power BI Pro ライセンスが必要か<br><b>→ 必要である可能性が高い。</b>新テナントは F2（有料）＋<b>Power BI Pro の試用版</b>で動いている（Fabric の試用容量ではない）</td><td><b>期限に注意。</b>Pro 試用版は60日で切れる。デモがそれ以降に及ぶなら、テストユーザー2人分の Pro ライセンスを手当てする。切れた状態で閲覧できるかを試せば要否が確定する</td><td><a href="#s2-2">2-2</a></td></tr>
         <tr><td>3</td><td><s>レイクハウス直バインドのオントロジーで行レベルの制御が効くか</s><br><b>→ 決着。効かない。テーブル分割も無意味。<span style="color:var(--danger);">レイクハウスを分けること</span></b></td><td>2026-09-21 実機確認。詳細は <a href="#s4-1">4-1</a> の注意枠</td><td><a href="#s4-1">4-1</a></td></tr>
-        <tr><td>4</td><td><code>https://ai.azure.com</code> 向け委任権限の具体的な API 名・スコープ名</td><td>アプリ登録①の「API のアクセス許可 &gt; 所属する組織で使用している API」で該当リソースを探し、表示名とスコープ名を記録する</td><td><a href="#s3-3">3-3</a></td></tr>
+        <tr><td>4</td><td><code>https://ai.azure.com</code> 向け委任権限の具体的な API 名・スコープ名<br><b>→ 確定。</b>API 名 <b>Azure Machine Learning Services</b>（appId <code>18a66f5f-dbdf-4c17-9dd7-1634712a9cbe</code>）のスコープ <b><code>user_impersonation</code></b>。あわせて Foundry のロール名は「Azure AI User」から<b>「Foundry User」「Foundry Project Manager」</b>に改名されており、エージェント呼び出しだけなら最小権限の <b>「Foundry Agent Consumer」</b>（<code>endpoints/interact/action</code>）がある</td><td>アプリ登録①の「API のアクセス許可 &gt; 所属する組織で使用している API」で該当リソースを探し、表示名とスコープ名を記録する</td><td><a href="#s3-3">3-3</a></td></tr>
         <tr><td>5</td><td>azd が <span class="path">azure.yaml</span> の <code>endpoint</code> で <code>${}</code> を展開するか</td><td><code>azd deploy</code> を実行し、プロジェクト解決でこけないか見る。こけたら実値を直書きする</td><td><a href="#s5-2">5-2</a></td></tr>
         <tr><td>6</td><td>新テナント／選んだリージョンで Foundry に「Fabric IQ」接続タイプが出るか</td><td>Foundry ポータルの New connection の一覧を見る</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>7</td><td>Fabric IQ が本当に「Foundry の呼び出し元」＝サインインした本人として動くか</td><td><code>FOUNDRY_CALL_AS=user</code> で、品質チーム未所属のユーザーに限定データが返らないことを確認する</td><td><a href="#s7-3">7-3</a></td></tr>
@@ -955,12 +995,14 @@ python setup_toolbox.py</pre>
         <tr><td>11</td><td><code>_PerToolCallLimitMiddleware</code> が Toolbox 経由の MCP ツール呼び出しにも効くか</td><td>同じ Fabric IQ ツールを3回以上呼ばせる質問を投げ、3回目が <code>tool_call_limit_exceeded</code> になるか見る</td><td><a href="#s5-5">5-5</a></td></tr>
         <tr><td>12</td><td>Invocations 経由の <code>session_id</code> / <code>user_id</code> が Responses 側と一致するか</td><td><code>client_register_obo.py</code> の出力と、Responses 側のログを突き合わせる</td><td><a href="#s7-1">7-1</a></td></tr>
         <tr><td>13</td><td>オントロジーへのアイテム単位の読み取り権限を付与する具体的な UI 経路</td><td>オントロジーの「アクセス許可の管理」に読み取りだけを付与するオプションがあるか確認する</td><td><a href="#s4-4">4-4</a></td></tr>
-        <tr><td>14</td><td>Foundry の接続タイプ一覧に <b>Fabric IQ</b> が無く、<b>Microsoft Fabric（プレビュー）</b>しか無い。これが Fabric IQ の経路として使えるか</td><td>接続フォームのキーが <code>workspace-id</code> / <code>artifact-id</code> で、データエージェント向けに見える。オントロジー作成後にこの接続を作り、<code>setup_toolbox.py</code> が通るかで判定する</td><td><a href="#s5-3">5-3</a></td></tr>
-        <tr><td>15</td><td>テナント設定 <code>PowerBIMCP</code>（Power BI MCP サーバーエンドポイント）が無効でも Fabric IQ の Toolbox が動くか</td><td>Fabric IQ のエンドポイントは <code>api.fabric.microsoft.com/v1/mcp/dataPlane/...</code> という MCP 形式。5-4 で認証・接続エラーが出たら、この設定を有効化して再試行する</td><td><a href="#s5-4">5-4</a></td></tr>
+        <tr><td>14</td><td>Foundry の接続タイプ一覧に <b>Fabric IQ</b> が無く、<b>Microsoft Fabric（プレビュー）</b>しか無い。これが Fabric IQ の経路として使えるか<br><b>→ 使えない（SDK で確認）。</b>「Microsoft Fabric」は<b>データエージェント用</b>（ツール種別 <code>fabric_dataagent_preview</code>）。Fabric IQ は MCP の URL と OAuth を持つ <code>RemoteTool_Preview</code> 種別の接続が必要で、ツールカタログ側から作る【要確認：UI 上の経路】</td><td>接続フォームのキーが <code>workspace-id</code> / <code>artifact-id</code> で、データエージェント向けに見える。オントロジー作成後にこの接続を作り、<code>setup_toolbox.py</code> が通るかで判定する</td><td><a href="#s5-3">5-3</a></td></tr>
+        <tr><td>15</td><td>テナント設定 <code>PowerBIMCP</code>（Power BI MCP サーバーエンドポイント）が無効でも Fabric IQ の Toolbox が動くか</td><td><b>Toolbox の作成は無効のままで成功した（2026-09-21）。</b>実行時に Fabric IQ の呼び出しが失敗したら、この設定を有効化して再試行する</td><td><a href="#s5-4">5-4</a></td></tr>
         <tr><td>16</td><td>Ontology の依存設定（Graph / データエージェント アイテム）が有効か</td><td>管理ポータルのテナント設定で直接確認する。<b>admin/tenantsettings API には返ってこない</b>ため、API では判定できない</td><td><a href="#s2-3">2-3</a></td></tr>
         <tr><td>17</td><td>オントロジーへのデータ取り込みは実コピーか参照か</td><td>付随 Lakehouse（<code>&lt;name&gt;_lh_&lt;id&gt;</code>）の OneLake 上のサイズを、バインド＋リフレッシュの前後で比べる。実コピーなら容量とリフレッシュ時間が上流データ量に比例する</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>18</td><td>時系列バインドがエンティティのキー列で正しく行を結び付けられるか</td><td>リフレッシュ後、<code>product_group</code> の1件を開いて時系列プロパティに12ヶ月分の値が付いているか見る。付いていなければ <code>propertyBindings</code> にキー列を含める方法が誤っている</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>19</td><td>同じエッジテーブルを2つのリレーションで共用できるか</td><td><code>edge_document_product</code> を公開用・限定用の2リレーションで共用している。リフレッシュ後、それぞれの文書エンティティから正しい製品だけを辿れるかを確認する</td><td><a href="#s4-3">4-3</a></td></tr>
+        <tr><td>20</td><td>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
+        <tr><td>21</td><td>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
       </tbody>
     </table>
   </div>

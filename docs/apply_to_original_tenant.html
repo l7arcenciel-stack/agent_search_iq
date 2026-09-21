@@ -222,7 +222,7 @@
     <div class="dep-arrow">▼ 待っている間に並行 ▼</div>
     <div class="dep-row dep-par"><span class="dep-tag">4-1〜4-4</span><div class="dep-body"><div class="dep-title">レイクハウス → Delta テーブル → Direct Lake モデル ／ 新インデックス作成・文書投入 ／ azd 環境の分離</div><div class="dep-note">すべて自分だけで進められる。全社員グループIDだけは依頼の結果待ち（暫定で既存の品質チームIDのみで先に投入し、後で入れ替えることもできる）。</div></div></div>
     <div class="dep-arrow">▼ 管理者の完了後 ▼</div>
-    <div class="dep-row"><span class="dep-tag">4-5〜4-8</span><div class="dep-body"><div class="dep-title">オントロジー作成・バインド → Fabric IQ 接続 → Toolbox → azd deploy</div><div class="dep-note">Ontology テナント設定とアプリ登録②の管理者同意が前提。</div></div></div>
+    <div class="dep-row"><span class="dep-tag">4-5〜4-8</span><div class="dep-body"><div class="dep-title">オントロジー作成・バインド → Fabric IQ 接続 → Toolbox → azd deploy</div><div class="dep-note">Ontology テナント設定とロール割り当て（依頼 #6）が前提。</div></div></div>
     <div class="dep-arrow">▼</div>
     <div class="dep-row"><span class="dep-tag">6</span><div class="dep-body"><div class="dep-title">新エージェントの2人比較 ＋ <b>既存エージェントの回帰確認</b></div><div class="dep-note">既存デモが以前と同じ答えを返すことまで見て、はじめて完了。</div></div></div>
   </div>
@@ -239,7 +239,7 @@
         <tr><td>2</td><td>Fabric テナント設定 <b>データエージェント関連</b>の有効化</td><td>Fabric 管理者</td><td><a href="#s4-5">4-5</a></td></tr>
         <tr><td>3</td><td><b>全社員セキュリティグループ</b>の新規作成（または既存の全社員グループの Object ID の提供）</td><td>Entra ID 管理者</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>4</td><td><b>新規アプリ登録①（OBO 用）</b>の作成と、Graph <code>GroupMember.Read.All</code> / Power BI <code>Dataset.Read.All</code> / <code>https://ai.azure.com</code> 向け委任権限の付与＋<b>管理者同意</b></td><td>アプリケーション管理者＋特権ロール管理者（同意）</td><td><a href="#s4-7">4-7</a></td></tr>
-        <tr><td>5</td><td><b>新規アプリ登録②（Fabric IQ 接続用）</b>の作成と、Power BI <code>Item.Execute.All</code> / <code>Item.Read.All</code> の付与＋<b>管理者同意</b>、リダイレクト URI の登録</td><td>同上</td><td><a href="#s4-6">4-6</a></td></tr>
+        <tr><td>5</td><td><s>新規アプリ登録②（Fabric IQ 接続用）</s> → <b>不要</b>。新テナントで確認した結果、Fabric IQ ツールの認証は「OAuth ID パススルー」（<code>UserEntraToken</code>：利用者本人のトークンをそのまま渡す）で、独自アプリもリダイレクト URI も要らなかった</td><td>—</td><td>—</td></tr>
         <tr><td>6</td><td>Foundry プロジェクトの<b>ロール割り当て</b>：テストユーザー2人に Foundry User 相当、自分に Foundry Project Manager</td><td>該当リソースの所有者／ユーザーアクセス管理者</td><td><a href="#s4-6">4-6</a> / <a href="#s6">6</a></td></tr>
         <tr><td>7</td><td>Fabric 容量への<b>ワークスペース作成権限</b>（新しいワークスペースを既存容量に割り当てられるか）</td><td>Fabric 容量管理者</td><td><a href="#s4-1">4-1</a></td></tr>
       </tbody>
@@ -251,14 +251,24 @@
     <p><b>既存のアプリ登録・既存のセマンティックモデル・既存のワークスペースには手を入れないでほしい</b>ことを明記する。「権限を足すだけなら既存アプリでいいのでは」と親切に提案されると、凍結中のデモが壊れる。</p>
   </div>
 
+  <div class="callout info">
+    <b>画面操作の代わりにスクリプトを渡せる</b>
+    <p>依頼 #3（全社員グループ）・#4（アプリ登録と管理者同意）・#6（ロール割り当て）は、<span class="path">tenant_setup/</span> のスクリプトで実行できる。管理者に<b>まず <code>--dry-run</code> の出力を見てもらい、了承を得てから本実行してもらう</b>と、何が変わるかを説明しやすく、設定ミスによる往復も減る。</p>
+    <pre>python tenant_setup/10_entra_groups_users.py --groups grp-all-employees --no-users --dry-run
+$env:OBO_APP_NAME = "&lt;既存デモと別の名前&gt;"
+python tenant_setup/20_entra_app_registration.py --dry-run
+python tenant_setup/40_foundry_rbac.py --dry-run</pre>
+    <p>どれも冪等で、同名のものがあれば作らない。<code>20</code> は同意を付与できなかった場合に「管理者の同意 URL」を表示する。シークレットは画面に出ずに管理者の PC の <code>~/.agent_search_iq/secrets/</code> に保存されるので、<b>受け渡しは Key Vault など安全な経路で</b>依頼する。</p>
+  </div>
+
   <div class="mailtpl">
     <h4>そのままコピーして送れる依頼文</h4>
-    <pre>件名: [依頼] Fabric IQ 検証環境の追加設定について（7件）
+    <pre>件名: [依頼] Fabric IQ 検証環境の追加設定について（6件）
 
 お疲れさまです。&lt;自分の名前&gt;です。
 
 Fabric のオントロジー（Fabric IQ）を使った検証を進めており、
-管理者権限が必要な設定を 7 件お願いしたく連絡しました。
+管理者権限が必要な設定を 6 件お願いしたく連絡しました。
 
 【前提・お願い】
 既存のデモ環境（エージェント名: agent-search-hosted）は現在も使用中のため、
@@ -298,26 +308,14 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
    理由: 利用者本人の権限で各データソースへ問い合わせるため。
    ※ 既存の OBO 用アプリ登録は変更せず、**新規に作成**してください。
 
-4) 新規アプリ登録②（Fabric IQ 接続用）
-   画面: 同上
-   表示名（案）: &lt;APP2_DISPLAY_NAME&gt;
-   設定: ・API のアクセス許可（委任）:
-             Power BI Service … Item.Execute.All, Item.Read.All
-         ・**管理者の同意**を付与
-         ・クライアントシークレットを1つ発行
-         ・リダイレクト URI は、こちらで Foundry の接続作成画面を開いた際に
-           表示される値を後ほどお伝えしますので、その時点で登録をお願いします。
-   理由: Foundry から Fabric のオントロジーへ接続するため。
-   ※ ①とは別のアプリとして作成してください（権限の切り分けのため）。
-
-5) Foundry プロジェクトのロール割り当て
+4) Foundry プロジェクトのロール割り当て
    画面: Azure ポータル > &lt;FOUNDRY_PROJECT_NAME&gt; > アクセス制御(IAM)
    内容: ・&lt;TEST_USER_1&gt;, &lt;TEST_USER_2&gt; に
            エージェントを呼び出せるロール（Foundry User 相当）
          ・&lt;自分のアカウント&gt; に Foundry Project Manager
    理由: 前者が無いと 403、後者が無いと接続が作成できないため。
 
-6) Fabric 容量へのワークスペース割り当て
+5) Fabric 容量へのワークスペース割り当て
    内容: 新しいワークスペース &lt;WORKSPACE_NAME&gt; を作成し、
          既存の Fabric 容量に割り当てられるようにしてください。
    理由: Direct Lake のレイクハウスを新規に作るため。
@@ -325,11 +323,11 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
 ──────────────────────────────
 
 【完了時にお知らせいただきたいもの】
-・1) 6) … 「完了」の一言
+・1) 5) … 「完了」の一言
 ・2)    … グループの**オブジェクトID（GUID）**
-・3) 4) … 各アプリの**クライアントID（アプリケーションID）**と、
+・3)    … アプリの**クライアントID（アプリケーションID）**と、
           **シークレット**（Key Vault 等、安全な経路でお願いします）
-・5)    … 「完了」の一言
+・4)    … 「完了」の一言
 
 お手数をおかけしますが、よろしくお願いいたします。</pre>
   </div>
@@ -492,19 +490,18 @@ azd env list                               # ★選択中(*)を確認</pre>
   </div>
 
   <div class="step" id="s4-6">
-    <label class="step-head"><input type="checkbox"><span class="step-no">4-6</span><span class="step-title">Fabric IQ 接続を作り、Toolbox を作成する</span><span class="badge b-admin">管理者待ち</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-6</span><span class="step-title">Fabric IQ ツール（接続）を作り、Toolbox を作成する</span><span class="badge b-admin">管理者待ち</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>既存の Foundry プロジェクトの中に、新エージェント用の Fabric IQ 経路を作る。</dd>
-      <dt>どこで</dt><dd>Foundry ポータル <span class="path">Settings &gt; Connections &gt; New connection &gt; Fabric IQ</span>、<span class="path">setup_toolbox.py</span></dd>
+      <dt>どこで</dt><dd>Foundry ポータル <span class="path">ビルド &gt; ツール</span>（「接続」画面ではない）、<span class="path">setup_toolbox.py</span></dd>
       <dt>手順</dt><dd><ol>
-        <li>依頼 #5 のアプリ登録②のクライアントID・シークレットを受け取る。</li>
-        <li>接続を作り、表示されたリダイレクト URI を管理者に伝えてアプリ登録②に追加してもらう（依頼 #5 の後半。ここで一度往復が発生する）。</li>
-        <li>接続IDを控える。</li>
+        <li><span class="path">ビルド &gt; ツール</span> で Fabric IQ を選び、元テナントのオントロジーの MCP URL を入れる。認証は既定の「OAuth ID パススルー」のまま。</li>
+        <li>詳細画面の「プロジェクト接続 ID」を控える。</li>
         <li><code>FABRIC_IQ_TOOLBOX_NAME</code> を<b>既存と混ざらない名前</b>にして <code>python setup_toolbox.py</code> を実行する。</li>
         <li>出力された MCP エンドポイントを控える。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd>接続一覧に新しい接続が並び、Toolbox の MCP エンドポイントが表示される。</dd>
-      <dt>落とし穴</dt><dd>リダイレクト URI の登録で管理者との往復が1回入る。<b>依頼を送る時点で「後から URI をお伝えします」と予告しておく</b>と、待ち時間が減る。<br>接続を作るには自分に Foundry Project Manager が要る（依頼 #6）。<br>参考: <a href="new_tenant_setup.html#s5-3">新テナント手順書 5-3 / 5-4</a></dd>
+      <dt>確認方法</dt><dd>ツールの詳細画面に接続 ID が表示され、Toolbox の MCP エンドポイントが出力される。</dd>
+      <dt>落とし穴</dt><dd>独自の OAuth アプリやリダイレクト URI は<b>不要</b>（新テナントで確認済み。利用者本人のトークンがそのまま渡る方式）。管理者との往復が1回減る。<br>接続を作るには自分に Foundry Project Manager が要る（依頼 #6）。<br>参考: <a href="new_tenant_setup.html#s5-3">新テナント手順書 5-3 / 5-4</a></dd>
     </dl>
   </div>
 

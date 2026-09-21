@@ -55,3 +55,6 @@ setup_toolbox.py
 # Fabric のノートブック上で実行するコード一式。Fabric 側で動かすものなので
 # エージェントのコンテナには不要（pyspark 依存のため、含めると import 解決で問題になりうる）。
 fabric_notebooks/
+
+# テナント側の準備（Entra・Fabric アイテム・Foundry ロール）を行うスクリプト。手元で実行するもの。
+tenant_setup/

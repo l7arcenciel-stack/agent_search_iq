@@ -47,11 +47,12 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 | 項目 | 新テナント | 元テナント | 同じ/変える | メモ |
 |---|---|---|---|---|
 | Fabric 容量 名前 | | | 流用 | 元テナントは既存容量に相乗り |
-| Fabric 容量 SKU | | | 流用 | 新テナントは F2 以上を推奨（試用容量は【要確認】） |
+| Fabric 容量 SKU | | | 流用 | 新テナントは F2 で構築し、途中で試用容量（FTL64）に付け替えても動いた。付け替えても F2 は自動で止まらない |
 | 容量の一時停止運用 | | | — | 新テナントはコスト削減のため停止運用するか |
 | ワークスペース名 | | | 変える | 元テナントは**新規ワークスペース**を作る |
 | ワークスペースID | | | 変える | |
-| レイクハウス名 | | | 同じ | 名前はそろえてよい（別ワークスペースなので衝突しない） |
+| レイクハウス名（公開） | `lh_public` | | 同じ | 全社員グループに読み取り。**権限はレイクハウス単位でしか切れない** |
+| レイクハウス名（限定） | `lh_restricted` | | 同じ | 品質チームグループのみに読み取り |
 | セマンティックモデル名（Direct Lake） | | | 同じ | **既存のインポートモードのモデルは使わない** |
 | セマンティックモデルID | | | 変える | `FABRIC_DATASET_ID` |
 | オントロジー名 | | | 同じ | |
@@ -59,21 +60,21 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 | テナント設定 Ontology item (preview) | 有効化した日: | 依頼日: / 完了日: | — | 元テナントは管理者依頼 |
 | テナント設定 データエージェント関連 | 有効化した日: | 依頼日: / 完了日: | — | 元テナントは管理者依頼 |
 
-### 2-1. Delta テーブル（閲覧範囲ごとに分ける）
+### 2-1. Delta テーブル（閲覧範囲ごとに**レイクハウスを**分ける）
 
-| テーブル名 | 閲覧範囲 | 静的/時系列 | 新テナント | 元テナント | メモ |
-|---|---|---|---|---|---|
-| | 全社公開 | 静的 | | | |
-| | 品質チーム限定 | 静的 | | | |
-| | — | 時系列 | | | |
-| （混合・権限確認用） | 公開＋限定 | 静的 | | | **本番では使わない。**判定が終わったらオントロジーから外す |
+`fabric_notebooks/01_create_delta_tables.py` を `TARGET` を変えて2回実行して作る。
 
-判定結果（行レベルの制御が効いたか）:
+| レイクハウス | テーブル | 新テナント | 元テナント | メモ |
+|---|---|---|---|---|
+| lh_public | product / product_group / site / quality_document_public | 作成済み | | 静的バインド |
+| lh_public | edge_product_product_group / edge_product_site / edge_document_public_product | 作成済み | | リレーション |
+| lh_public | product_group_sales_monthly / site_sales_monthly | 作成済み | | 時系列バインド |
+| lh_restricted | quality_document_restricted / edge_document_restricted_product | 作成済み | | 品質チーム限定 |
 
-- [ ] 効いた（未所属ユーザーに限定行が返らなかった）
-- [ ] 効かなかった（限定行が返った）→ **テーブル分割が必須**
-- 判定日:
-- 判定に使った質問:
+権限分離の判定結果（新テナント、2026-09-21）:
+
+- [x] 1つのレイクハウス内でテーブルを分けても**効かなかった**（読み取りを与えると全テーブルが見えた）
+- [x] **レイクハウスを分けたら効いた**（未所属ユーザーは限定エンティティが 401、所属ユーザーは両方見える）
 
 ## 3. Entra ID
 
@@ -93,11 +94,12 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 
 | 役割 | 新テナント 表示名 | 元テナント 表示名 | 品質チーム所属 | ライセンス | メモ |
 |---|---|---|---|---|---|
-| ユーザーA | | | あり | | |
+| ユーザーA | | | あり | Power BI（無料） | 新テナントでは無料版で Fabric へのサインインとオントロジー閲覧ができた |
 | ユーザーB | | | なし | | |
 
 - [ ] 2人とも初回サインイン・MFA 登録済み（デモ当日にやらせない）
-- [ ] 2人とも Fabric IQ の OAuth 同意済み
+- [ ] 2人とも Fabric IQ の OAuth 同意済み（Fabric IQ ツールが本人トークン方式のため、同意が要るかは【要確認】）
+- [ ] ライセンス割り当て前に利用場所（usageLocation）を設定した
 
 ### 3-3. アプリ登録①（OBO 用）
 
@@ -111,27 +113,20 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 | パブリッククライアントフロー | 有効 | 有効 | 同じ | デバイスコードに必須 |
 | Graph `GroupMember.Read.All` | 同意済み: | 同意済み: | 同じ | |
 | Power BI `Dataset.Read.All` | 同意済み: | 同意済み: | 同じ | |
-| `https://ai.azure.com` 向け委任権限 | API 表示名: / スコープ名: | | 同じ | **【要確認】**実際の名前をここに記録する |
+| `https://ai.azure.com` 向け委任権限 | Azure Machine Learning Services / `user_impersonation` | | 同じ | appId `18a66f5f-dbdf-4c17-9dd7-1634712a9cbe`（Microsoft のアプリなのでテナント共通） |
+| 自アプリの `access_as_user` への同意 | 同意済み: | 依頼日: / 完了日: | 同じ | デモUIが自アプリの API のトークンを取るため |
 | 管理者同意 | 実施日: | 依頼日: / 完了日: | — | 元テナントは管理者依頼 |
 
-### 3-4. アプリ登録②（Fabric IQ 接続用。①とは別に作る）
+### 3-4. ~~アプリ登録②（Fabric IQ 接続用）~~ → 不要
 
-| 項目 | 新テナント | 元テナント | 同じ/変える | メモ |
-|---|---|---|---|---|
-| 表示名 | | | **必ず変える** | |
-| クライアントID | | | **必ず変える** | |
-| シークレットの保管場所 | | | — | **値は書かない** |
-| Power BI `Item.Execute.All` | 同意済み: | 同意済み: | 同じ | |
-| Power BI `Item.Read.All` | 同意済み: | 同意済み: | 同じ | |
-| リダイレクト URI | | | 変える | Foundry の接続作成画面に表示される値 |
-| 管理者同意 | 実施日: | 依頼日: / 完了日: | — | |
+Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`：利用者本人のトークンをそのまま渡す）で、独自の OAuth アプリもリダイレクト URI も要らなかった。元テナントでも依頼しない。
 
 ### 3-5. ロール割り当て
 
 | 対象 | ロール | 新テナント | 元テナント | メモ |
 |---|---|---|---|---|
-| ユーザーA / B | Foundry User 相当 | 実施日: | 依頼日: / 完了日: | 無いと 403 |
-| 自分 | Foundry Project Manager | 実施日: | 依頼日: / 完了日: | 接続作成に必要 |
+| 全社員グループ | **Foundry Agent Consumer**（プロジェクト） | 実施日: | 依頼日: / 完了日: | エージェント呼び出しだけの最小権限。403 なら Foundry User に上げる |
+| 自分 | **Foundry Project Manager**（プロジェクト） | 実施日: | 依頼日: / 完了日: | ツール・Toolbox 作成に必要。**サブスクリプション Owner だけでは足りない**（データ操作を含まないため） |
 | 自分 | Fabric 管理者 | 実施日: | **付与されない前提** | 新テナントのみ |
 
 ## 4. Azure リソース
@@ -158,9 +153,10 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 | エージェント名（`azure.yaml`） | `agent-search-iq` | | **必ず変える** | 既存 `agent-search-hosted` と衝突させない。`IQ_AGENT_NAME` も合わせる |
 | `AGENT_DISPLAY_NAME` | | | **必ず変える** | ログで見分けるため |
 | azd 環境名 | | | **必ず変える** | `azd deploy` の前に毎回 `azd env list` |
-| Fabric IQ 接続名 | | | 変える | |
-| Fabric IQ 接続ID | | | 変える | `FABRIC_IQ_PROJECT_CONNECTION_ID` |
-| Toolbox 名 | | | 変える | `FABRIC_IQ_TOOLBOX_NAME` |
+| Fabric IQ ツール（接続）名 | `ontagentsearchiq` | | 変える | ポータルの**ビルド > ツール**から作る（「接続」画面の「Microsoft Fabric」は別物）。認証は既定の「OAuth ID パススルー」 |
+| 接続の共有設定 | `isSharedToAll: false`（作成直後） | | — | 作成者以外が使えない可能性【要確認】 |
+| Fabric IQ 接続ID | | | 変える | `FABRIC_IQ_PROJECT_CONNECTION_ID`。**ARM のフルパス**（`/subscriptions/.../connections/<name>`） |
+| Toolbox 名 | `fabric-iq-toolbox` | | 変える | `FABRIC_IQ_TOOLBOX_NAME` |
 | Toolbox バージョン | | | 変える | 再実行すると上がる |
 | Toolbox MCP エンドポイント | | | 変える | `FABRIC_IQ_TOOLBOX_ENDPOINT` |
 | `FOUNDRY_CALL_AS` | `user` | `user` | 同じ | **変えない** |
@@ -182,20 +178,28 @@ GUID（テナントID・クライアントID・グループID・ワークスペ�
 
 ## 7. 未確認事項の結果
 
-[new_tenant_setup.html](new_tenant_setup.html#s8) の 13 件について、実機で確認した結果を記録する。
+[new_tenant_setup.html](new_tenant_setup.html#s8) の §8 について、実機で確認した結果を記録する（2026-09-21 時点）。
 
 | # | 内容 | 結果 | 確認日 |
 |---|---|---|---|
-| 1 | 試用容量で Data Agent / Ontology が動くか | | |
-| 2 | F64 未満での Power BI Pro ライセンス要件 | | |
-| 3 | レイクハウス直バインドで行レベル制御が効くか | | |
-| 4 | `https://ai.azure.com` 向け委任権限の API 名・スコープ名 | | |
+| 1 | 試用容量で Data Agent / Ontology が動くか | 途中経過：レイクハウス・オントロジー定義・Direct Lake への DAX は FTL64 で動いた。オントロジーのデータ問い合わせと Fabric IQ 経由は未確認 | 2026-09-21 |
+| 2 | F64 未満での Power BI Pro ライセンス要件 | Power BI（無料）で Fabric へのサインインとオントロジー閲覧はできた。エージェント経由は未確認 | 2026-09-21 |
+| 3 | レイクハウス直バインドで行レベル制御が効くか | **効かない。テーブル分割も無意味。レイクハウスを分けると効く** | 2026-09-21 |
+| 4 | `https://ai.azure.com` 向け委任権限の API 名・スコープ名 | Azure Machine Learning Services / `user_impersonation` | 2026-09-21 |
 | 5 | azd が `azure.yaml` の `endpoint` で `${}` を展開するか | | |
-| 6 | Foundry に「Fabric IQ」接続タイプが出るか | | |
-| 7 | Fabric IQ が呼び出し元本人として動くか | | |
+| 6 | Foundry に「Fabric IQ」接続タイプが出るか | 「接続」画面には無い。**ビルド > ツール**に Fabric IQ があり、そこから作る | 2026-09-21 |
+| 7 | Fabric IQ が呼び出し元本人として動くか | 接続の認証方式は `UserEntraToken`（本人トークンを渡す）。実際の挙動は未確認 | |
 | 8 | Fabric IQ の MCP ツール名と `output` 上の表現 | | |
 | 9 | `function_call_output` が `output` に含まれるか | | |
 | 10 | Fabric IQ 経由の応答時間 | | |
 | 11 | Tool Call Limit が MCP ツールにも効くか | | |
 | 12 | Invocations の `session_id` / `user_id` が Responses と一致するか | | |
-| 13 | オントロジーへのアイテム単位の読み取り権限の付与経路 | | |
+| 13 | オントロジーへのアイテム単位の読み取り権限の付与経路 | オントロジーの「アクセス許可の管理」で読み取りのみ付与できる。**データを引くにはバインド元レイクハウスの読み取りも必要** | 2026-09-21 |
+| 14 | 「Microsoft Fabric」接続が Fabric IQ に使えるか | **使えない**（データエージェント用） | 2026-09-21 |
+| 15 | `PowerBIMCP` 無効でも Toolbox が動くか | Toolbox の作成は無効のままで成功。実行時は未確認 | 2026-09-21 |
+| 16 | Ontology の依存設定（Graph / データエージェント）が有効か | admin API には返らない。ポータルで確認 | |
+| 17 | オントロジーへの取り込みは実コピーか参照か | | |
+| 18 | 時系列バインドがキー列で正しく結合できるか | | |
+| 19 | 同じエッジテーブルを2リレーションで共用できるか | 共用はできた。ただし権限分離のため最終的にはエッジも分けた | 2026-09-21 |
+| — | 作成直後の Fabric IQ 接続が `isSharedToAll: false` の影響 | | |
+| — | Foundry Agent Consumer で Invocations（OBO 登録）まで通るか | | |

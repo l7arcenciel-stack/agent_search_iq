@@ -312,6 +312,16 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <p>レイクハウス側のテーブルを作り直しても、オントロジーをリフレッシュするまで古いままの内容で答える。</p>
       <p class="fix">→ データを直したのに答えが変わらないときは、まずリフレッシュを疑う。</p>
     </div>
+
+    <div class="silent-item">
+      <h4><span class="n">F</span>デモユーザーの Fabric 権限が足りないと「権限がありません」に化ける <span class="badge b-ok">確認済</span></h4>
+      <p>管理者（ワークスペース管理者）で試すと全部通るので、テストユーザーで初めて気づく。どちらもエラー画面にはならない。</p>
+      <ul>
+        <li><b>ワークスペースのロールが無い</b>（オントロジーのアイテム共有だけ）→ Fabric IQ のツール一覧取得が 403。エージェントは質問のたびに最初にツール一覧を取るため、<b>Fabric IQ を使わない質問まで含めて回答が空</b>になる</li>
+        <li><b>セマンティックモデルのビルド権限が無い</b>（ワークスペース閲覧者には付かない）→ 売上の DAX 照会が 404。エージェントは<b>「閲覧権限がないため回答できません」</b>と答えるので、権限デモの正しい挙動に見えてしまう</li>
+      </ul>
+      <p class="fix">→ <a href="#s4-7">4-7</a> で、デモユーザーを<b>ワークスペースの閲覧者</b>にし、モデルに<b>ビルド</b>を付ける。閲覧者にしても <code>lh_restricted</code> は読めない（閲覧者にはレイクハウスの全データ読み取りが付かない）ので、権限分離は崩れない。</p>
+    </div>
   </div>
 
   <!-- ================= 2 ================= -->
@@ -507,7 +517,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <dt>確認方法</dt><dd><code>az role assignment list --scope &lt;project の ID&gt;</code> に2件並ぶ。実地確認は 7-1 でテストユーザーが質問を送って 403 が返らないこと。</dd>
       <dt>落とし穴</dt><dd><b>ロール名が変わっている。</b>旧「Azure AI User」「Azure AI Project Manager」は見つからず、<b>「Foundry User」「Foundry Project Manager」「Foundry Agent Consumer」</b>などになっていた。名前で探して見つからなければ <code>az role definition list --query "[?contains(roleName,'Foundry')].roleName"</code> で確認する。<br>
         <b>サブスクリプションの Owner でも Toolbox は作れない。</b>Owner はコントロールプレーンの権限で、Toolbox 作成などのデータ操作（dataActions）を含まない。自分にも Foundry 系ロールを付ける。<br>
-        <b>Foundry Agent Consumer で Invocations プロトコル（OBO 登録）まで通るかは【要確認】</b>。403 になったら <b>Foundry User</b> に上げる。<br>
+        <b>Foundry Agent Consumer で Invocations プロトコル（OBO 登録）と Fabric IQ まで通る</b>（2026-09-22 確認）。Fabric IQ が 403 になる場合は Foundry のロールではなく Fabric 側の権限（<a href="#s4-7">4-7</a>）を疑う。<br>
         ロールが無いと <b>403</b> で止まる。デモUI側は 403 を「接続が切れました」と表示するため、原因を取り違えやすい。<br>
         Git Bash から <code>az role assignment create --scope /subscriptions/...</code> を打つと、<code>/subscriptions</code> が Windows パスに変換されて <code>MissingSubscription</code> になる。<code>export MSYS_NO_PATHCONV=1</code> を先に実行する。</dd>
     </dl>
@@ -771,6 +781,28 @@ export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;
       <dt>落とし穴</dt><dd><b>限定エンティティの行が見えてしまったら、レイクハウスの分け方が間違っている。</b>1つのレイクハウスにまとめていないか、未所属ユーザーに <code>lh_restricted</code> の権限が漏れていないかを確認する。<br>
         <b>エンティティ名と列名は権限に関係なく見える。</b>隠せるのは中身だけなので、<b>エンティティ名自体を秘密にしない</b>（例: <code>merger_project_codenames</code> のような名前を付けない）。<br>
         共有時の「受信者にメールで通知する」は、メールボックスの無いテストユーザーでは外しておく。</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="s4-7">
+    <label class="step-head"><input type="checkbox"><span class="step-no">4-7</span><span class="step-title">デモユーザーをワークスペースの閲覧者にし、モデルにビルドを付ける</span><span class="badge b-ok">確認済</span></label>
+    <dl class="step-body">
+      <dt>目的</dt><dd>エージェント経由（本人のトークン）で Fabric IQ と売上の照会が通るようにする。4-6 のポータル確認が通っても、これが無いとエージェントからは使えない。</dd>
+      <dt>どこで</dt><dd>Fabric ポータル。ワークスペースの <span class="path">アクセスの管理</span> と、セマンティックモデル <span class="path">sm_agent_search_iq &gt; … &gt; 権限の管理</span></dd>
+      <dt>手順</dt><dd><ol>
+        <li>ワークスペースの <span class="path">アクセスの管理</span> で、<b>全社員グループ</b>（またはテストユーザー2人）を<b>閲覧者（Viewer）</b>として追加する。</li>
+        <li>セマンティックモデルの <span class="path">権限の管理 &gt; ユーザーの追加</span> で、同じ相手に<b>ビルド</b>（「このデータセットを使用してコンテンツを作成することをユーザーに許可する」）を付ける。</li>
+        <li>ポータルの既定では<b>書き込み・再共有まで付く</b>ので外し、<b>「ワークスペース ビューアー, ビルド」</b>だけにする。</li>
+      </ol>
+      API で付ける場合（ビルド）：<code>POST https://api.powerbi.com/v1.0/myorg/groups/&lt;ws&gt;/datasets/&lt;dataset&gt;/users</code>、本文 <code>{"identifier":"&lt;UPN&gt;","principalType":"User","datasetUserAccessRight":"ReadExplore"}</code></dd>
+      <dt>確認方法</dt><dd>
+        テストユーザーの資格情報で（<code>AZURE_CONFIG_DIR</code> を分けて <code>az login</code> すると管理者の状態を壊さない）：<br>
+        ・オントロジーの MCP エンドポイント（<code>/v1/mcp/dataPlane/workspaces/&lt;ws&gt;/items/&lt;onto&gt;/ontologyEndpoint</code>）への <code>tools/list</code> が <b>200</b><br>
+        ・同じエンドポイントで未所属ユーザーが <code>quality_document_restricted</code> を問い合わせると<b>拒否</b>される（<code>… you don't have access to any matching node types due to security configuration enforcement</code>）<br>
+        ・<code>executeQueries</code>（拠点売上金額 × 地域名称）が3行返る
+      </dd>
+      <dt>落とし穴</dt><dd><b>管理者のアカウントで確認しても意味がない</b>（全部通る）。必ずテストユーザーで見る。<br>
+        Fabric ライセンスは <b>Power BI 無料版のまま</b>で、F2 上のモデルへの照会も Fabric IQ も通った。Foundry 側も <b>Foundry Agent Consumer のまま</b>でよい（Foundry User は不要）。</dd>
     </dl>
   </div>
 
@@ -1044,8 +1076,8 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>17</td><td>オントロジーへのデータ取り込みは実コピーか参照か</td><td>付随 Lakehouse（<code>&lt;name&gt;_lh_&lt;id&gt;</code>）の OneLake 上のサイズを、バインド＋リフレッシュの前後で比べる。実コピーなら容量とリフレッシュ時間が上流データ量に比例する</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>18</td><td>時系列バインドがエンティティのキー列で正しく行を結び付けられるか</td><td>リフレッシュ後、<code>product_group</code> の1件を開いて時系列プロパティに12ヶ月分の値が付いているか見る。付いていなければ <code>propertyBindings</code> にキー列を含める方法が誤っている</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>19</td><td>同じエッジテーブルを2つのリレーションで共用できるか</td><td><code>edge_document_product</code> を公開用・限定用の2リレーションで共用している。リフレッシュ後、それぞれの文書エンティティから正しい製品だけを辿れるかを確認する</td><td><a href="#s4-3">4-3</a></td></tr>
-        <tr><td>20</td><td>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
-        <tr><td>21</td><td>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
+        <tr><td>20</td><td><s>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</s><br><b>→ 使える（2026-09-22）。</b>テストユーザーの 403 の原因は接続ではなく Fabric 側の権限（ワークスペースのロールなし）。<a href="#s4-7">4-7</a> で解消</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
+        <tr><td>21</td><td><s>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</s><br><b>→ 通る（2026-09-22）。</b>Fabric IQ・売上の照会まで含めて、2人の3問比較が期待どおりになった</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
         <tr><td>22</td><td><s>Fabric IQ の自然文検索が失敗する</s><br><b>→ 解決（2026-09-21）。原因は2つ：</b>(1) 日本リージョンで必須の「Azure OpenAI に送信されたデータは…外部に<b>格納</b>できます」が無効だった（有効化後、反映に20〜30分）。(2) 日本語の業務用語のままだと NL→GQL の変換に失敗する。<b>英語で、スキーマの名前（<code>product_group</code> など）を使えば通る</b>。エージェントの指示に問い合わせ方を追記して対処</td><td>F2 で確認。<b>試用容量で AI 機能が動くかは未確認</b>。「Which product_group does the product with product_id A005 belong to?」で A005→PG02（金属部品）がグラフから返った</td><td><a href="#s4-3">4-3</a></td></tr>
       </tbody>
     </table>

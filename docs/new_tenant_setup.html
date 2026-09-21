@@ -372,13 +372,20 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <b>ポータルで直接確認すること</b>。API で見えないことを「設定が無い」と解釈しない。</dd>
       <dt>落とし穴</dt><dd>テナント設定の反映には数分〜十数分かかることがある。すぐ出てこなくても一度時間を置く。<br>新テナントでは自分が Global Administrator だが、<b>Fabric 管理者ロールは別枠</b>。管理ポータルが開けない場合は、Entra ID で自分に Fabric 管理者（Power BI 管理者）ロールを付ける。<br>
         <b>Ontology だけを有効にして満足しない。</b>依存する2設定が無効のままだと、オントロジーは作れても中身が機能しない形で詰まる可能性がある。<br>
-        <b>【要確認】日本リージョンの容量では、AI 処理の国外処理設定が要る可能性が高い。</b>
-        Fabric IQ の自然文検索（<code>search_ontology</code>）が <code>Failed to translate NL query to ontology query.</code> で即座に失敗した。
-        エンティティ一覧の取得は成功し、GraphModel のスキーマも正常、容量を F2 に戻しても同じだったため、残る候補が
-        <b>「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で<u>処理</u>できます」</b>（<code>AllowSendAOAIDataToOtherRegions</code>）。
-        設定の説明に「容量の地域が、Fabric のために Azure OpenAI を使用できる地域の外部にある場合にのみ適用」とある。
-        <b>オンにすると質問文などのデータが国外で処理される</b>ので、元テナントでは<b>データ所在地の観点で社内承認が要る</b>可能性がある。
-        「…外部に<u>格納</u>できます」のほうは、まず無効のままで試す。</dd>
+        <b>【確認済】容量が米国・EU 以外（Japan East など）なら、AI の国外「処理」と「格納」の両方が必須。</b>
+        Fabric IQ の自然文検索（<code>search_ontology</code>）はデータエージェントの仕組みで動くため、
+        <a href="https://learn.microsoft.com/en-us/fabric/data-science/data-agent-tenant-settings">データエージェントの必須テナント設定</a>
+        （<a href="https://learn.microsoft.com/en-us/fabric/iq/ontology/overview-tenant-settings">オントロジーの必須設定</a>から参照されている）をすべて満たす必要がある：
+        <ul style="margin:6px 0 0;padding-left:20px;">
+          <li>ユーザーは Azure OpenAI を利用した Copilot、AI エージェント…を使用できる</li>
+          <li>容量を Fabric Copilot 容量として指定できる</li>
+          <li>Azure OpenAI に送信されたデータは…外部で<b>処理</b>できます（容量が米国・EU 以外なら必須）</li>
+          <li>Azure OpenAI に送信されたデータは…外部に<b>格納</b>できます（同上。<b>エージェントが会話履歴を最長28日保存する</b>ため）</li>
+        </ul>
+        Fabric の AI を動かす Azure OpenAI は<b>米国と EU にしか置かれていない</b>。これらが欠けていると、エンティティ一覧は取れるのに自然文検索だけ
+        <code>Failed to translate NL query to ontology query.</code> で即座に失敗する（新テナントで踏んだ）。
+        <b>反映には最大1時間</b>かかる。「Microsoft サブプロセッサーとしての OpenAI」の2設定は必須ではない。<br>
+        <b>オンにすると質問文などが国外で処理され、会話履歴が国外に保存される</b>ので、元テナントでは<b>データ所在地の社内承認</b>が要る可能性が高い。</dd>
     </dl>
   </div>
 
@@ -663,8 +670,8 @@ Entity type names must be unique within a namespace.</pre>
         <code>^EntityTypes/[^/]+/definition\.json$</code> のように厳密に判定すること。<br>
 
         <b>④ バインドを保存した時点で取り込みが走る。</b>初回は手動リフレッシュ不要だった【要確認】。
-        アイテムの <code>...</code> メニューにリフレッシュ相当の項目は無く、ジョブ API
-        （<code>POST /items/&lt;id&gt;/jobs/instances?jobType=...</code>）も <code>InvalidJobType</code> で受け付けない。
+        オントロジー本体の <code>...</code> メニューにリフレッシュ項目は無く、オントロジーに対するジョブ API も <code>InvalidJobType</code> だった。
+        <b>実際のリフレッシュは付随の GraphModel 側のジョブ（<code>jobType: Refresh</code>）</b>で、定義を保存すると自動で走る。履歴は <code>GET /workspaces/&lt;ws&gt;/items/&lt;graphModelId&gt;/jobs/instances</code> で確認できる。
         ただし<b>上流テーブルを更新したあと</b>に自動反映されるかは別問題で、未確認。<br>
 
         <b>⑤ 値が全部 null なら、まず <code>DecimalType</code> を疑う</b>（→ 4-1）。
@@ -1020,7 +1027,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>19</td><td>同じエッジテーブルを2つのリレーションで共用できるか</td><td><code>edge_document_product</code> を公開用・限定用の2リレーションで共用している。リフレッシュ後、それぞれの文書エンティティから正しい製品だけを辿れるかを確認する</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>20</td><td>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>21</td><td>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
-        <tr><td>22</td><td><b>Fabric IQ の自然文検索が失敗する</b>（<code>Failed to translate NL query to ontology query.</code>）。日本リージョンで AI の国外処理設定が要るか</td><td>2026-09-21、テナント設定「…外部で処理できます」をオンにして反映待ち。オンにした後に Toolbox の MCP エンドポイントへ直接 <code>tools/call</code> を投げて確かめる。<b>試用容量・F2 のどちらでも失敗した</b>ので容量の種類は原因ではない。GraphModel のスキーマとバインドも正常だった</td><td><a href="#s2-3">2-3</a></td></tr>
+        <tr><td>22</td><td><b>Fabric IQ の自然文検索が失敗する</b>（<code>Failed to translate NL query to ontology query.</code>）<br><b>→ 原因の見込み：日本リージョンで必須の AI 設定のうち「外部に格納」が無効だった</b>（要件はドキュメントで確認済み。2-3 参照）</td><td>2026-09-21 に「処理」「格納」とも有効化し、反映待ち（最大1時間）。反映後に Toolbox の MCP へ直接 <code>tools/call</code> して通るか確かめる。切り分けの経過：容量の種類（試用 / F2）、GraphModel のスキーマ・リフレッシュ、質問の言語はいずれも原因ではなかった</td><td><a href="#s2-3">2-3</a></td></tr>
       </tbody>
     </table>
   </div>

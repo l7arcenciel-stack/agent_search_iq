@@ -242,7 +242,7 @@
         <tr><td>5</td><td><s>新規アプリ登録②（Fabric IQ 接続用）</s> → <b>不要</b>。新テナントで確認した結果、Fabric IQ ツールの認証は「OAuth ID パススルー」（<code>UserEntraToken</code>：利用者本人のトークンをそのまま渡す）で、独自アプリもリダイレクト URI も要らなかった</td><td>—</td><td>—</td></tr>
         <tr><td>6</td><td>Foundry プロジェクトの<b>ロール割り当て</b>：テストユーザー2人に Foundry User 相当、自分に Foundry Project Manager</td><td>該当リソースの所有者／ユーザーアクセス管理者</td><td><a href="#s4-6">4-6</a> / <a href="#s6">6</a></td></tr>
         <tr><td>7</td><td>Fabric 容量への<b>ワークスペース作成権限</b>（新しいワークスペースを既存容量に割り当てられるか）</td><td>Fabric 容量管理者</td><td><a href="#s4-1">4-1</a></td></tr>
-        <tr><td>8</td><td><b>【条件付き・要承認】</b>Fabric テナント設定「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で<b>処理</b>できます」の有効化。<br>新テナント（Japan East）で Fabric IQ の自然文検索が失敗し、この設定が原因と見ている（検証中）。<b>質問文などが国外で処理される</b>ため、<b>データ所在地について社内の承認が要る</b>可能性がある。<b>新テナントで必要と確定したら依頼する</b></td><td>Fabric 管理者（＋情報セキュリティ部門の承認）</td><td><a href="new_tenant_setup.html#s2-3">新テナント 2-3</a></td></tr>
+        <tr><td>8</td><td><b>【要承認】</b>Fabric テナント設定の2つを有効化：<br>・Azure OpenAI に送信されたデータは…外部で<b>処理</b>できます<br>・Azure OpenAI に送信されたデータは…外部に<b>格納</b>できます<br>容量が米国・EU 以外なら、Fabric IQ の自然文検索（データエージェント）に<b>必須</b>（<a href="https://learn.microsoft.com/en-us/fabric/data-science/data-agent-tenant-settings">Microsoft Learn</a>）。<b>質問文などが国外で処理され、会話履歴が国外に最長28日保存される</b>ため、<b>情報セキュリティ部門などデータ所在地の承認が要る</b>可能性が高い。<b>承認の見込みが立たないと Fabric IQ 経路のデモができない</b>ので、休み明け初日に論点として出しておく</td><td>Fabric 管理者（＋承認部門）</td><td><a href="new_tenant_setup.html#s2-3">新テナント 2-3</a></td></tr>
       </tbody>
     </table>
   </div>
@@ -264,12 +264,13 @@ python tenant_setup/40_foundry_rbac.py --dry-run</pre>
 
   <div class="mailtpl">
     <h4>そのままコピーして送れる依頼文</h4>
-    <pre>件名: [依頼] Fabric IQ 検証環境の追加設定について（6件）
+    <pre>件名: [依頼] Fabric IQ 検証環境の追加設定について（7件）
 
 お疲れさまです。&lt;自分の名前&gt;です。
 
 Fabric のオントロジー（Fabric IQ）を使った検証を進めており、
-管理者権限が必要な設定を 6 件お願いしたく連絡しました。
+管理者権限が必要な設定を 7 件お願いしたく連絡しました。
+※ 6) はデータの国外処理・保存を伴うため、承認手続きが必要であればご教示ください。
 
 【前提・お願い】
 既存のデモ環境（エージェント名: agent-search-hosted）は現在も使用中のため、
@@ -321,10 +322,21 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
          既存の Fabric 容量に割り当てられるようにしてください。
    理由: Direct Lake のレイクハウスを新規に作るため。
          既存のワークスペース・セマンティックモデルには変更を加えません。
+6) 【承認が必要な可能性あり】Fabric テナント設定の有効化（2件）
+   画面: Fabric ポータル > 設定(歯車) > 管理ポータル > テナント設定 > Copilot と AI
+   内容: ・「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部で処理できます」
+         ・「Azure OpenAI に送信されたデータは、容量の地理的リージョン…の外部に格納できます」
+   理由: 容量が米国・EU 以外のリージョンの場合、Fabric のデータエージェント機能
+         （オントロジーへの自然文での問い合わせ）に必須とされています。
+         出典: https://learn.microsoft.com/en-us/fabric/data-science/data-agent-tenant-settings
+   影響: 問い合わせ内容が国外（米国または EU）の Azure OpenAI で処理され、
+         会話履歴が最長28日間国外に保存されます。
+   対象を絞る場合は、セキュリティグループ &lt;GROUP_NAME&gt; 限定で構いません。
+
 ──────────────────────────────
 
 【完了時にお知らせいただきたいもの】
-・1) 5) … 「完了」の一言
+・1) 5) 6) … 「完了」の一言（6) は承認の要否も）
 ・2)    … グループの**オブジェクトID（GUID）**
 ・3)    … アプリの**クライアントID（アプリケーションID）**と、
           **シークレット**（Key Vault 等、安全な経路でお願いします）

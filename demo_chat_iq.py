@@ -48,6 +48,7 @@ demo_chat_iq.py — agent-search-iq（Fabric IQ 搭載版）用のデモUI（Str
 """
 import json
 import os
+import tempfile
 
 import msal
 import requests
@@ -288,7 +289,13 @@ def _analyze(body: dict) -> dict:
     elif consents:
         reply = "この質問に答えるには、追加の許可が必要です。下のリンクから許可したあと、もう一度同じ質問を送ってください。"
     else:
-        reply = "（応答からテキストを抽出できませんでした）"
+        # 原因調査用に応答全体を一時フォルダへ保存する（応答本文にトークンは含まれない）
+        path = os.path.join(tempfile.gettempdir(), "demo_chat_iq_last_response.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False, indent=2)
+        detail = body.get("error") or body.get("incomplete_details") or ""
+        reply = (f"（応答からテキストを抽出できませんでした。status={body.get('status')} "
+                 f"output={len(body.get('output') or [])}件 {detail}　応答全体: {path}）")
 
     return {
         "reply": reply,

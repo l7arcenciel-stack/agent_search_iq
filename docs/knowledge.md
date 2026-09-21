@@ -76,6 +76,12 @@
 - 接続 ID は **ARM のフルパス**（`/subscriptions/.../projects/<p>/connections/<name>`）
 - 作成直後の接続は `isSharedToAll: false`。作成者以外が使えるか【要確認】
 - MCP ツール名は **`fabric_iq_ontology___list_ontology_entity_types`** と **`fabric_iq_ontology___search_ontology`**。接頭辞なしで呼ぶと `No tool config matches tool name`
+- **一般ユーザーがエージェントを呼ぶと、最初の MCP `tools/list` が Fabric に 403 で拒否され、応答全体が失敗する**（`Failed to enter context manager` / `HTTP_403`）。
+  Fabric IQ を使わない質問も空になる。管理者なら通る。詳細は operations_log.md §18
+  - 同じユーザーで**オントロジー MCP を直接呼んでも 403**（`InsufficientPrivileges`）→ デモ UI のサインイン方式の問題ではなく、Fabric 側の権限不足
+  - ユーザーはワークスペースロールなし・オントロジーのアイテム共有だけ（ワークスペースのアイテム一覧は 401）。
+    オントロジーに付随する GraphModel・Lakehouse への権限が無いのが原因と推測【要確認：ワークスペース閲覧者を一時付与して切り分け中】
+  - ワークスペース閲覧者を付けると `lh_restricted` も読めてしまうので、確定後は付随アイテムの個別共有で絞れるか確認する
 - エージェントのログ（`azd ai agent monitor`）には `ToolExecutionException` までしか出ない。
   **Toolbox の MCP エンドポイントへ直接 `tools/call` すると生のエラーが見える**（手順は operations_log.md §16）
 
@@ -167,6 +173,7 @@
 ## 11. まだ確かめていないこと
 
 - 2人での比較（デモ UI）の実地確認。特に **Foundry Agent Consumer で OBO 登録（Invocations）が通るか**、**Fabric IQ の接続が作成者以外でも使えるか**
+- **一般ユーザーが Fabric IQ の MCP で 403 になる件の原因**（ワークスペースロール／付随アイテムの権限／Fabric ライセンス／Foundry User ロールのどれか）と、`lh_restricted` を見せずに通す最小権限
 - 説明欄に日本語の同義語を書くと、日本語の業務用語のままでも自然文検索が通るか
 - 上流テーブルを更新したとき、オントロジーに自動で反映されるか
 - F64 未満で閲覧ユーザーに Power BI Pro が要るか（エージェント経由を含めて）

@@ -473,7 +473,29 @@ azd env get-values > .env        # ※ BOM なしで書き直した（下記）
 
 ---
 
+## 18. 一般ユーザーだと Fabric IQ の MCP が 403 になる（調査中）
+
+デモ UI で品質 太郎・営業 次郎としてサインインすると、どの質問でも回答が空になった。管理者では正答（A005 → 金属部品、ロッテルダム工場）。
+
+- デモ UI を変更し、テキストを抽出できないときは `status` / `error` を表示し、応答全体を一時フォルダの `demo_chat_iq_last_response.json` に保存するようにした
+- 応答は `status: failed`、`server_error`：`Failed to enter context manager` … `tools/list failed … fabric_iq_ontology … HTTP_403 Access denied`。
+  エージェントは**最初にツール一覧を取得**し、そこで失敗すると **Fabric IQ を使わない質問も含めて応答全体が失敗**する
+- 切り分け：営業 次郎の資格情報（`AZURE_CONFIG_DIR` を分けて `az login`）で直接確認した
+
+| 確認 | 管理者 | 営業 次郎 |
+|---|---|---|
+| ワークスペースのアイテム一覧 | 200 | **401** |
+| オントロジー MCP `initialize` / `tools/list`（直接） | 200 | **403** `InsufficientPrivileges` |
+| エージェント（Responses） | 正答 | failed（HTTP_403） |
+
+- → **デモ UI のサインインではなく、Fabric が本人を拒否している。**
+- ワークスペースのロールは管理者のみ。2人はオントロジーのアイテム共有だけで、付随の GraphModel・Lakehouse（`ont_…_graph_…` / `ont_…_lh_…`）には権限が無い
+- 公式ドキュメント上の利用者の条件：オントロジーとデータソースの読み取り、Fabric ライセンス、Foundry プロジェクトの **Foundry User** ロール（2人は Foundry Agent Consumer）
+- 次の手順：営業 次郎を**ワークスペース閲覧者に一時追加**して再確認 → 通れば原因確定。その後ロールを外し、付随アイテムの個別共有で通るか確認（閲覧者のままだと `lh_restricted` も見える）
+
+---
+
 ## 未完了（2026-09-21 時点）
 
-- ブラウザ方式でのサインインと、2人での比較（デモ UI）
+- ブラウザ方式でのサインイン（済）と、2人での比較（デモ UI）→ §18 の 403 を解消してから
 - 不要だったアプリ登録②の削除

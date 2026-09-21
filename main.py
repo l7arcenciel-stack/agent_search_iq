@@ -345,7 +345,9 @@ _FABRIC_TOOL_DESCRIPTION = (
     f"利用可能な集計軸/フィルタ用の列: {list(COLUMNS.keys())}\n"
     "filtersは、ユーザーの質問文に明示的に含まれる絞り込み条件に対応する場合にのみ追加する"
     "こと。ユーザーが言っていない条件（通貨・期間等）を勝手に補って追加してはいけない。"
-    "measures（売上金額・原価金額・粗利等）は既に全社共通で円換算済みの値。"
+    "measures（売上金額・原価金額・粗利等）は既に全社共通で円換算済みの値。\n"
+    "製品（製品ID・製品名）では絞り込めない。製品に関連する売上は、先に Fabric IQ で"
+    "その製品の商品群コードまたは拠点コードを調べ、そのコードで絞り込むこと。"
 )
 
 
@@ -360,7 +362,9 @@ def query_fabric_tool(
     plan = {
         "measures": measures,
         "group_by": group_by or [],
-        "filters": [f.model_dump() for f in (filters or [])],
+        # agent_framework は入れ子のモデルを FabricFilter ではなく dict のまま渡してくる
+        # （実機・ローカルで確認。model_dump() を呼ぶと AttributeError → "Function failed"）
+        "filters": [f.model_dump() if isinstance(f, BaseModel) else dict(f) for f in (filters or [])],
         "top_n": top_n,
     }
     try:
@@ -369,6 +373,9 @@ def query_fabric_tool(
         return {"error": "invalid_query_plan", "message": str(e)}
     except RuntimeError as e:
         return {"error": "fabric_call_failed", "message": str(e)}
+    except Exception as e:  # 想定外の例外も中身を返す（「Function failed」だけでは原因を追えないため）
+        logger.exception("query_fabric_tool failed")
+        return {"error": "fabric_call_failed", "message": f"{type(e).__name__}: {e}"}
     return result
 
 
@@ -386,6 +393,14 @@ AGENT_INSTRUCTIONS = (
     "- query_fabric_tool: 売上・粗利等の『数値実績』をFabricセマンティックモデルから集計する\n"
     "- Fabric IQ のツール（オントロジー）: 製品・拠点・得意先・設備などの『業務概念どうしの関係』を"
     "たどる質問、複数の業務領域にまたがる質問に使う\n"
+    "\n"
+    "【製品に関連する売上の求め方】\n"
+    "売上データは商品群別と拠点別しかなく、query_fabric_tool は製品では絞り込めません。"
+    "『製品A008の商品群の売上』のように製品から売上を求めるときは、必ず次の順に呼んでください。\n"
+    "1. Fabric IQ の search_ontology で、その製品の商品群（product_group_code）または生産拠点（site_code）を調べる\n"
+    "2. query_fabric_tool を、1で得た『商品群コード』または『拠点コード』で絞り込んで呼ぶ\n"
+    "文書（search_documents_tool）の記載から商品群を推測して代用しないでください。"
+    "1で商品群・拠点が取得できなかった場合は、売上は『取得できませんでした』と明示してください。\n"
     "\n"
     "【Fabric IQ（オントロジー）への問い合わせ方】\n"
     "オントロジーの検索ツール（search_ontology）に渡す質問文 naturalLanguageQuery は、ユーザーの日本語を"

@@ -21,6 +21,9 @@
 | 5 | AI Search の ACL は**実グループの GUID** で投入し、グループを変えたら**再投入** | エラーにならずに誰にも文書が見えなくなる |
 | 6 | エージェントには「Fabric IQ へは英語・スキーマ名・1回にまとめて」と指示する | 変換失敗、並列呼び出しの失敗、推測での誤答 |
 | 7 | デモ UI のサインインは**ブラウザ方式**（デバイスコードは使わない） | セキュリティ既定値・条件付きアクセスで `AADSTS530035` |
+| 8 | デモユーザーを**ワークスペースの閲覧者**にする（アイテム共有だけでは不可） | Fabric IQ のツール一覧が 403 になり、**どの質問も回答が空**になる |
+| 9 | セマンティックモデルにデモユーザーの**ビルド権限**を付ける | 売上の DAX 照会が 404 になり、全員「権限がない」と回答される |
+| 10 | 製品に関連する売上は「**Fabric IQ で商品群コードを取る → そのコードで売上を照会**」の順にさせる | 製品IDで絞っても効かず、全商品群の売上を A008 の売上として答える／推測で商品群を埋める |
 
 ---
 
@@ -34,6 +37,9 @@
   未所属ユーザーは公開エンティティだけ引け、限定エンティティは 401 になる（実機で確認）
 - エッジテーブルも閲覧範囲で分ける（まとめると限定文書の存在と ID が公開側から見える）
 - レイクハウスの共有では「すべての SQL エンドポイント データを読み取る」「すべての Apache Spark を読み取り…」の**両方にチェック**が要る（既定の共有だけでは 401）
+- **ワークスペースの閲覧者にしても、権限の分離は崩れない。**閲覧者にはレイクハウスの全データ読み取り（ReadAll）が付かないため、
+  共有していない `lh_restricted` は OneLake で 403、オントロジーの制限付きエンティティは
+  `does not match any node type in the graph, or you don't have access … due to security configuration enforcement` で拒否される（実機で確認）
 - **エンティティ名と列名は権限に関係なく見える。**名前自体を秘密にしない
 - アイテム単位の権限付与は **API が見つからずポータル作業**（`/items/<id>/permissions` などは 404）
 
@@ -76,12 +82,13 @@
 - 接続 ID は **ARM のフルパス**（`/subscriptions/.../projects/<p>/connections/<name>`）
 - 作成直後の接続は `isSharedToAll: false`。作成者以外が使えるか【要確認】
 - MCP ツール名は **`fabric_iq_ontology___list_ontology_entity_types`** と **`fabric_iq_ontology___search_ontology`**。接頭辞なしで呼ぶと `No tool config matches tool name`
-- **一般ユーザーがエージェントを呼ぶと、最初の MCP `tools/list` が Fabric に 403 で拒否され、応答全体が失敗する**（`Failed to enter context manager` / `HTTP_403`）。
-  Fabric IQ を使わない質問も空になる。管理者なら通る。詳細は operations_log.md §18
-  - 同じユーザーで**オントロジー MCP を直接呼んでも 403**（`InsufficientPrivileges`）→ デモ UI のサインイン方式の問題ではなく、Fabric 側の権限不足
-  - ユーザーはワークスペースロールなし・オントロジーのアイテム共有だけ（ワークスペースのアイテム一覧は 401）。
-    オントロジーに付随する GraphModel・Lakehouse への権限が無いのが原因と推測【要確認：ワークスペース閲覧者を一時付与して切り分け中】
-  - ワークスペース閲覧者を付けると `lh_restricted` も読めてしまうので、確定後は付随アイテムの個別共有で絞れるか確認する
+- **ワークスペースのロールが無いユーザーは、Fabric IQ の MCP が 403**（`InsufficientPrivileges`）。オントロジーのアイテム共有だけでは足りない。
+  管理者は通るので気づきにくい。詳細は operations_log.md §18
+  - エージェントは質問のたびに**最初にツール一覧（`tools/list`）を取得**し、ここで失敗すると
+    `Failed to enter context manager` … `HTTP_403` で**応答全体が失敗**する（Fabric IQ を使わない質問も空になる）
+  - 本人の資格情報でオントロジー MCP を直接呼んでも 403 → デモ UI のサインイン方式の問題ではなかった
+  - **ワークスペースの閲覧者にすると解消**（2人とも）。閲覧者でも権限の分離は崩れない（§1）
+  - 公式ドキュメントが挙げる Fabric ライセンス（無料版のまま）・Foundry User ロール（Foundry Agent Consumer のまま）は変えずに通った
 - エージェントのログ（`azd ai agent monitor`）には `ToolExecutionException` までしか出ない。
   **Toolbox の MCP エンドポイントへ直接 `tools/call` すると生のエラーが見える**（手順は operations_log.md §16）
 
@@ -100,6 +107,7 @@
 - `naturalLanguageResponse: true` だと要約生成がときどき `naturalLanguageResponseError: 403 (Forbidden)` を返す。
   **データ（`raw.Fields` / `raw.Value`）は取れている**のに、エージェントが「403」を権限不足と誤読した → `false` にする
 - 取得できなかった項目を**推測で埋める**ことがあった（製品名を商品群名として回答）。指示で禁止する
+- **製品から売上を求める質問（「A008の商品群の売上」）で Fabric IQ を呼ばず、売上ツールを製品IDで直接絞ろうとした。**指示とツール説明に「Fabric IQ で商品群コード → そのコードで照会」の手順を書き、売上ツールの列から製品を外したら、2人とも Fabric IQ → 売上の順に呼ぶようになった【確認済】
 - 以上は `main.py` の `AGENT_INSTRUCTIONS` に反映済み。より根本的には説明欄に日本語の同義語を書く【要確認：効果未検証】
 
 ## 4. セマンティックモデル（Direct Lake）【確認済】
@@ -108,17 +116,28 @@
 - レイクハウスから作れば全テーブル `mode: directLake`。接続は `Sql.Database("<SQLエンドポイント>", "<SQLエンドポイントID>")`
 - 売上のファクトが複数あるときは、メジャー名に集計軸を含める（`商品群売上金額` / `拠点売上金額`）。「売上金額」で統一すると誤った組み合わせで空の結果になる
 - 01（テーブル）/ 02（モデル）/ 03（オントロジー）/ `fabric_schema.py` の名前は常に一致させる
+- このデモのモデルは **`lh_public` の SQL エンドポイント**に接続し、**RLS のロールは無い**＝売上は全員が同じ結果になる設計（README の期待結果どおり）
+- 本人のトークンで `executeQueries` を呼ぶには、モデルへの**読み取り＋ビルド（ReadExplore）**が要る。
+  **ワークスペースの閲覧者にはビルドが付かず**、`404 PowerBIEntityNotFound`（not found or you do not have permission）になる。
+  エージェントはこれを「閲覧権限がない」と回答する。**ビルドを付けると解消**【確認済】
+- ポータルの「権限の管理」でユーザーを追加すると、既定で**書き込み・再共有**まで付く。デモユーザーには**読み取り＋ビルドだけ**にする
+- 閲覧ユーザーが **Power BI 無料版のままでも、F2 上のモデルに本人トークンで DAX 照会できた**【確認済】
+- **product → product_group は多対一で、絞り込みは product_group → product の向きにしか伝わらない。**`product[product_id]` で絞って `商品群売上金額` を出すと、エラーにならず**全商品群の行が返る**（誤答の元）。このため `fabric_schema.py` の列から製品を外した【確認済】
 
 ## 5. Foundry と azd
 
 - `azd deploy` には `azure.yaml` の設定とは別に **`AZURE_AI_PROJECT_ID`** と **`FOUNDRY_PROJECT_ENDPOINT`** が要る（足りないと1つずつしか教えてくれない）【確認済】
 - `azd` は `auth.useAzCliAuth true` で `az login` の資格情報を使える。`azure.ai.agents` 拡張が要る【確認済】
 - ロール名が **Foundry User / Foundry Project Manager / Foundry Agent Consumer** に変わっている【確認済】。
-  エージェント呼び出しだけなら **Foundry Agent Consumer**（`endpoints/interact/action`）。これで Invocations（OBO 登録）まで通るかは【要確認】
+  エージェント呼び出しだけなら **Foundry Agent Consumer**（`endpoints/interact/action`）。**これで Invocations（OBO 登録）と Fabric IQ まで通った**（Foundry User は不要だった）【確認済】
 - **サブスクリプション Owner だけでは Toolbox を作れない**（dataActions を含まない）【確認済】
 - **チャットモデルの容量 1（1,000 TPM）では、Fabric IQ のツール定義込みで即レート制限**。50 にした（Standard は従量課金で固定費は増えない）【確認済】
   元テナントでは**既存デモと容量を共有**するので注意
 - `function_call_output` は Responses の `output` に含まれる【確認済】
+- **agent_framework（1.19.0）の `@tool` は、`list[BaseModel]` の引数を BaseModel ではなく dict のまま関数に渡す。**`f.model_dump()` が `AttributeError` になり、モデル側には `Error: Function failed.` としか見えない。絞り込み付きの売上照会は、これが原因で**最初から一度も成功していなかった**。dict でも受けるように直した【確認済】
+  - ツール内の想定外の例外や引数検証の失敗も、すべて `Function failed.` になる。ツールの中で例外を捕まえて中身を返すと原因を追える
+  - ローカルで `await main.query_fabric_tool.invoke(arguments={...})` を呼べば、デプロイせずに再現できる
+- デモ UI の「処理詳細を見る」に、各ツールの**引数と結果**を表示するようにした。セッションが休止するとログ（`azd ai agent monitor`）は取れなくなるので、画面で見るほうが早い
 - リポジトリ直下の大きなファイルはリモートビルドに送られる → `.agentignore` で除外【確認済】
 - ログは `azd ai agent sessions list <agent>` → `azd ai agent monitor <agent> --session-id <id> --tail 300`
 - プロジェクトの Bicep デプロイは、既存アカウントへの追加時に `RequestConflict`（一時的）になることがある。再実行で通る【確認済】
@@ -133,7 +152,7 @@
 - `https://ai.azure.com` の委任権限の実体は **Azure Machine Learning Services の `user_impersonation`**【確認済】
 - デモ UI は自アプリの API（`api://<appId>/.default`）のトークンを取るので、**自分自身の `access_as_user` にも同意**が要る【確認済】
 - ライセンス割り当ての前に**利用場所（usageLocation）**を設定する。直後は反映待ちで失敗するので再試行【確認済】
-- `POWER_BI_STANDARD` は **Power BI 無料版**。これで Fabric へのサインインとオントロジー閲覧はできた【確認済】。F64 未満で Pro が要るかは、エージェント経由を含めて【要確認】
+- `POWER_BI_STANDARD` は **Power BI 無料版**。これで Fabric へのサインインとオントロジー閲覧はできた【確認済】。F2 上のモデルへの本人トークンでの DAX 照会も無料版で通った。レポートの閲覧に Pro が要るかは【要確認】（このデモでは使わない）
 - 既定の「All Company」は M365 グループなので ACL に使わない【確認済】
 - 認証方法の登録状況を API で読むには追加の権限、登録レポートには Entra ID P1 が要る【確認済】
 
@@ -172,8 +191,5 @@
 
 ## 11. まだ確かめていないこと
 
-- 2人での比較（デモ UI）の実地確認。特に **Foundry Agent Consumer で OBO 登録（Invocations）が通るか**、**Fabric IQ の接続が作成者以外でも使えるか**
-- **一般ユーザーが Fabric IQ の MCP で 403 になる件の原因**（ワークスペースロール／付随アイテムの権限／Fabric ライセンス／Foundry User ロールのどれか）と、`lh_restricted` を見せずに通す最小権限
 - 説明欄に日本語の同義語を書くと、日本語の業務用語のままでも自然文検索が通るか
 - 上流テーブルを更新したとき、オントロジーに自動で反映されるか
-- F64 未満で閲覧ユーザーに Power BI Pro が要るか（エージェント経由を含めて）

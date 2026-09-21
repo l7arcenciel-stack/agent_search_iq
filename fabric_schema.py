@@ -62,9 +62,12 @@ COLUMNS = {
     "拠点コード": {"table": "site", "name": "site_code"},
     "拠点名称": {"table": "site", "name": "name"},
     "地域名称": {"table": "site", "name": "region_name"},  # 日本・アジア・欧州
-    # --- 製品（product） ---
-    "製品ID": {"table": "product", "name": "product_id"},  # A001等。AI Search側の文書と共通のキー
-    "製品名称": {"table": "product", "name": "name"},
+    # --- 製品（product）は意図的に載せていない ---
+    # 売上のファクトは商品群別・拠点別しかなく、product → product_group の
+    # リレーションは多対一（絞り込みは product_group → product の向きにしか伝わらない）。
+    # 製品IDで絞ってもエラーにならず全商品群の売上が返る（実機確認 2026-09-21）ため、
+    # Agentに選ばせない。製品の商品群・拠点は Fabric IQ（オントロジー）で調べ、
+    # 商品群コード・拠点コードで照会させる（main.py の AGENT_INSTRUCTIONS 参照）。
     # --- 時系列の集計軸 ---
     # このモデルには日付ディメンションテーブルが無いため、ファクト側の period_start を
     # 直接集計軸に使う。売上テーブルが2つあるので、どちらの月次かを名前で区別する

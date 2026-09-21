@@ -243,6 +243,8 @@ def _analyze(body: dict) -> dict:
     used: list[str] = []                 # 呼ばれたツール名（順序保持）
     outputs: dict[str, dict | None] = {}  # call_id -> 結果
     consents: list[dict] = []
+    details: list[dict] = []             # 処理詳細に出す各呼び出しの引数と結果（順序保持）
+    detail_by_call: dict[str, dict] = {}
 
     for item in body.get("output", []) or []:
         t = item.get("type")
@@ -253,13 +255,21 @@ def _analyze(body: dict) -> dict:
         elif t == "function_call":
             name = item.get("name") or ""
             used.append(name)
+            d = {"name": name, "args": item.get("arguments") or "", "output": ""}
+            details.append(d)
             if item.get("call_id"):
                 calls[item["call_id"]] = name
+                detail_by_call[item["call_id"]] = d
         elif t == "function_call_output":
             if item.get("call_id"):
                 outputs[item["call_id"]] = _parse_tool_output(item.get("output"))
+                if item["call_id"] in detail_by_call:
+                    detail_by_call[item["call_id"]]["output"] = _as_text(item.get("output"))
         elif t == "mcp_call":
-            used.append(item.get("name") or item.get("server_label") or "fabric_iq")
+            name = item.get("name") or item.get("server_label") or "fabric_iq"
+            used.append(name)
+            details.append({"name": name, "args": item.get("arguments") or "",
+                            "output": _as_text(item.get("error") or item.get("output"))})
         elif t == "oauth_consent_request":
             link = item.get("consent_link")
             if isinstance(link, str) and link.startswith("https://"):
@@ -303,7 +313,20 @@ def _analyze(body: dict) -> dict:
         "unavailable": [s for s in _SOURCE_ORDER if s in unavailable],
         "consents": consents,
         "tools": used,
+        "details": details,
     }
+
+
+def _as_text(value) -> str:
+    """ツールの引数・結果を表示用の文字列にする（JSON 文字列なら日本語を読める形に整形）。"""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return value
+    return json.dumps(value, ensure_ascii=False, indent=1)
 
 
 def _render_assistant(msg: dict) -> None:
@@ -332,8 +355,15 @@ def _render_assistant(msg: dict) -> None:
 
     if msg.get("tools"):
         with st.expander("処理詳細を見る"):
-            for name in msg["tools"]:
-                st.text(name)
+            details = msg.get("details")
+            if not details:
+                for name in msg["tools"]:
+                    st.text(name)
+            for d in details or []:
+                st.markdown(f"**{d['name']}**")
+                st.code(_as_text(d["args"])[:1000] or "（引数なし）", language="json")
+                if d["output"]:
+                    st.code(d["output"][:2000], language="json")
 
 
 # ============================================================================
@@ -506,6 +536,7 @@ if question:
                     "unavailable": result["unavailable"],
                     "consents": result["consents"],
                     "tools": result["tools"],
+                    "details": result["details"],
                     "who": who,
                 }
             except RuntimeError as e:  # user モードのトークン取得失敗

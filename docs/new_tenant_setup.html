@@ -460,7 +460,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <dt>どこで</dt><dd>Entra 管理センター <span class="path">ID &gt; アプリケーション &gt; アプリの登録 &gt; 新規登録</span></dd>
       <dt>手順</dt><dd><ol>
         <li>アプリを登録する（例: <code>app-agent-search-iq-obo</code>）。サポートされるアカウントの種類は「この組織ディレクトリのみ」。</li>
-        <li><span class="path">認証</span> で「パブリック クライアント フローを許可する」を<b>はい</b>にする（デバイスコードフローに必須）。</li>
+        <li><span class="path">認証</span> で「パブリック クライアント フローを許可する」を<b>はい</b>にし、<b>「モバイル アプリケーションとデスクトップ アプリケーション」のリダイレクト URI に <code>http://localhost</code></b> を追加する（デモ UI のブラウザ方式サインイン用）。</li>
         <li><span class="path">API の公開</span> でスコープ <code>access_as_user</code> を追加する。アプリケーション ID の URI は既定の <code>api://&lt;CLIENT_ID&gt;</code> のままでよい。</li>
         <li><span class="path">API のアクセス許可</span> に委任のアクセス許可を追加する：
           <ul>
@@ -473,7 +473,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li><span class="path">証明書とシークレット</span> でクライアントシークレットを作り、<b>値を安全な場所に保管する</b>（画面を離れると二度と見られない）。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>アクセス許可の一覧で、追加したすべての権限の状態が「&lt;テナント名&gt; に付与されました」の緑チェックになっている。<br>実地確認としては、5-5 の後に <code>streamlit run demo_chat_iq.py</code> でサインインが通ること。</dd>
-      <dt>落とし穴</dt><dd><code>https://ai.azure.com</code> の委任権限が無い／同意が無いと、サインイン<b>直後</b>に <code>AADSTS65001</code>（同意が必要）や <code>AADSTS650057</code>（リソース未登録）で止まる。エラーが出るぶんまだ気づける方。<br>シークレットの有効期限を短くしすぎると、デモ当日に切れる。</dd>
+      <dt>落とし穴</dt><dd><code>https://ai.azure.com</code> の委任権限が無い／同意が無いと、サインイン<b>直後</b>に <code>AADSTS65001</code>（同意が必要）や <code>AADSTS650057</code>（リソース未登録）で止まる。エラーが出るぶんまだ気づける方。<br>シークレットの有効期限を短くしすぎると、デモ当日に切れる。<br><b>デバイスコード方式のサインインは、セキュリティ既定値のテナントで <code>AADSTS530035</code> により拒否された</b>（パスワード＋MFA は通ったうえで）。デモ UI は既定でブラウザ方式（認可コード＋PKCE）を使うので、リダイレクト URI <code>http://localhost</code> が必須。</dd>
     </dl>
   </div>
 
@@ -931,8 +931,9 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
       <dt>目的</dt><dd>同じ画面を2人分、独立したセッションで開く。</dd>
       <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_chat_iq.py</code></dd>
       <dt>手順</dt><dd><ol>
-        <li>通常ウィンドウとシークレットウィンドウ（または別プロファイル）で同じ URL を開く。</li>
-        <li>片方でユーザーA（品質チーム所属）、もう片方でユーザーB（未所属）としてデバイスコードでサインインする。</li>
+        <li>デモ UI を起動する：<code>.\.venv\Scripts\streamlit run demo_chat_iq.py --server.address localhost</code>（<span class="path">.env</span> は <code>azd env get-values</code> から BOM なしで作る）。</li>
+        <li><b>Edge / Chrome</b> で2つ開く（通常ウィンドウ＝ユーザーA、InPrivate か別プロファイル＝ユーザーB）。<b>VS Code 内蔵ブラウザは使わない</b>（サインインが <code>AADSTS900561</code> で失敗する）。</li>
+        <li>それぞれで「Microsoftアカウントでサインイン」を押すと、既定のブラウザにアカウント選択画面が開く。<b>「別のアカウントを使用」</b>で該当ユーザーを選び、MFA まで完了させる。</li>
         <li>画面上部に「✅ 品質チーム所属」／「— 品質チーム未所属」のバッジが正しく出ることを確認する。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>バッジが2人で違っている。ここが両方「未所属」なら、<code>QUALITY_TEAM_GROUP_ID</code> が GUID になっていないか、グループのメンバー登録が反映されていない。</dd>

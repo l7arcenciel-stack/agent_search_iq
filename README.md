@@ -15,7 +15,8 @@ Delta テーブルの作成）。エージェント本体からは import され
 `tenant_setup/` は **テナント側の準備**（Entra のグループ・ユーザー・アプリ登録と管理者同意、
 Fabric のワークスペース・レイクハウス・オントロジー、Foundry のロール）を行うスクリプト。
 すべて `--dry-run` 付き・冪等。実行順は `tenant_setup/README.md`。
-新テナントで実際に行った操作の記録は [docs/operations_log.md](docs/operations_log.md)。
+新テナントで実際に行った操作の記録は [docs/operations_log.md](docs/operations_log.md)、
+テーマ別の知見のまとめは [docs/knowledge.md](docs/knowledge.md)。
 
 **別テナントで一式を組み直す場合**は
 [docs/new_tenant_setup.html](docs/new_tenant_setup.html)（新テナントでの再構築手順）と

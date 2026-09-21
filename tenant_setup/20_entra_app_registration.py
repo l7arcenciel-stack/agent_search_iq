@@ -134,6 +134,18 @@ def main() -> None:
         if s >= 300:
             raise SystemExit(f"アプリ作成に失敗: {app}")
 
+    # デモUIのブラウザ方式サインイン（認可コード＋PKCE）のリダイレクト先。
+    # デバイスコード方式はセキュリティ既定値で AADSTS530035 になるため、ブラウザ方式を使う。
+    redirect = "http://localhost"
+    if redirect not in (app.get("publicClient") or {}).get("redirectUris", []):
+        h.step(a.dry_run, f"リダイレクト URI（パブリッククライアント）: {redirect}")
+        if not a.dry_run:
+            uris = sorted(set((app.get("publicClient") or {}).get("redirectUris", [])) | {redirect})
+            h.call("PATCH", h.GRAPH + f"/applications/{app['id']}", tok,
+                   {"publicClient": {"redirectUris": uris}})
+    else:
+        h.step(False, f"既存: リダイレクト URI {redirect}")
+
     if not app.get("identifierUris"):
         h.step(a.dry_run, f"identifierUri: api://{app['appId']}")
         if not a.dry_run:

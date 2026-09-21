@@ -330,13 +330,37 @@ def _render_assistant(msg: dict) -> None:
 
 
 # ============================================================================
-# サインイン（デバイスコード。デモ開始前に各ウィンドウで済ませておく）
+# サインイン（デモ開始前に各ウィンドウで済ませておく）
 # ============================================================================
+# 既定はブラウザでの通常のサインイン（認可コード＋PKCE、リダイレクト先 http://localhost）。
+# デバイスコード方式は、セキュリティ既定値が有効なテナントでは
+#   AADSTS530035: Access has been blocked by security defaults
+# で止められた（パスワード＋MFA は通ったうえで拒否される）。企業テナントでも条件付きアクセスで
+# 禁止されていることが多いので、既定にしない。DEMO_SIGNIN=device で従来方式に戻せる。
+# ブラウザ方式はアプリ登録にパブリッククライアントのリダイレクト URI http://localhost が要る。
 
-def _start_device_flow() -> None:
+_SIGNIN = (os.environ.get("DEMO_SIGNIN") or "browser").strip().lower()
+
+
+def _check_settings() -> None:
     missing = [n for n, v in (("OBO_TENANT_ID", OBO_TENANT_ID), ("OBO_CLIENT_ID", OBO_CLIENT_ID), ("OBO_APP_SCOPE", OBO_APP_SCOPE)) if not v]
     if missing:
         raise RuntimeError("必要な設定が.envにありません: " + ", ".join(missing))
+
+
+def _sign_in_browser() -> None:
+    """既定のブラウザでサインイン画面を開き、完了までブロックする。
+    prompt=select_account で、既にサインイン済みのアカウントがあっても選び直せるようにする
+    （2人目を別アカウントでサインインさせるため）。"""
+    _check_settings()
+    result = _msal_app().acquire_token_interactive(
+        scopes=[OBO_APP_SCOPE], prompt="select_account", timeout=300
+    )
+    _finish_sign_in(result)
+
+
+def _start_device_flow() -> None:
+    _check_settings()
     flow = _msal_app().initiate_device_flow(scopes=[OBO_APP_SCOPE])
     if "user_code" not in flow:
         raise RuntimeError(f"サインインの開始に失敗しました: {flow}")
@@ -344,10 +368,14 @@ def _start_device_flow() -> None:
 
 
 def _complete_sign_in() -> None:
-    app = _msal_app()
     flow = st.session_state["device_flow"]
-    result = app.acquire_token_by_device_flow(flow)  # ブラウザでのサインイン完了までブロック
+    result = _msal_app().acquire_token_by_device_flow(flow)  # ブラウザでのサインイン完了までブロック
     st.session_state["device_flow"] = None
+    _finish_sign_in(result)
+
+
+def _finish_sign_in(result: dict) -> None:
+    app = _msal_app()
     if "access_token" not in result:
         st.session_state["error"] = f"サインインに失敗しました: {result.get('error')}: {result.get('error_description')}"
         return
@@ -404,7 +432,15 @@ if st.session_state["error"]:
 if not st.session_state["signed_in"]:
     st.subheader("サインイン")
     st.write("デモを始める前に、このウィンドウで使うアカウントでサインインしてください。")
-    if st.session_state["device_flow"] is None:
+    if _SIGNIN != "device":
+        if st.button("Microsoftアカウントでサインイン", type="primary"):
+            with st.spinner("ブラウザでサインインしてください（アカウントの選択画面が開きます）..."):
+                try:
+                    _sign_in_browser()
+                except RuntimeError as e:
+                    st.session_state["error"] = str(e)
+            st.rerun()
+    elif st.session_state["device_flow"] is None:
         if st.button("Microsoftアカウントでサインイン", type="primary"):
             try:
                 _start_device_flow()

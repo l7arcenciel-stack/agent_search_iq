@@ -299,6 +299,8 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
    画面: Entra 管理センター > ID > アプリケーション > アプリの登録 > 新規登録
    表示名（案）: &lt;APP1_DISPLAY_NAME&gt;
    設定: ・「パブリック クライアント フローを許可する」を有効
+         ・リダイレクト URI（モバイル/デスクトップ）に http://localhost を追加
+           （デモ画面のサインイン用。デバイスコード方式は条件付きアクセス等で拒否されるため）
          ・「API の公開」でスコープ access_as_user を追加
          ・API のアクセス許可（すべて委任）:
              Microsoft Graph  … GroupMember.Read.All

@@ -456,7 +456,24 @@ Accept: application/json, text/event-stream
 
 ---
 
+## 17. デモ UI の起動とサインイン方式の変更
+
+```powershell
+.\.venv\Scripts\python -m pip install -r requirements-demo.txt
+azd env get-values > .env        # ※ BOM なしで書き直した（下記）
+.\.venv\Scripts\streamlit run demo_chat_iq.py --server.address localhost --server.port 8501 --server.headless true
+```
+- PowerShell 5.1 の `Set-Content -Encoding utf8` は BOM を付け、`.env` の1行目の変数名が壊れる → BOM なしで書き直した。
+- Streamlit は既定で全インターフェースで待ち受ける（LAN から開ける）。トークンを扱うので `--server.address localhost` にした。
+- サインインでのエラー：
+  1. VS Code 内蔵ブラウザでデバイスコードのページを開くと `AADSTS900561: The endpoint only accepts POST requests`
+  2. 通常のブラウザでも、パスワード＋MFA の後に **`AADSTS530035`（セキュリティ既定値によるブロック）**。MFA 登録は済んでいた
+- 対処：デモ UI のサインインを**ブラウザ方式（MSAL `acquire_token_interactive`、認可コード＋PKCE）**に変更（既定。`DEMO_SIGNIN=device` で旧方式）。
+  アプリ登録にパブリッククライアントのリダイレクト URI `http://localhost` を追加（`tenant_setup/20` を更新して適用）。
+
+---
+
 ## 未完了（2026-09-21 時点）
 
-- 2人での比較（デモ UI）
+- ブラウザ方式でのサインインと、2人での比較（デモ UI）
 - 不要だったアプリ登録②の削除

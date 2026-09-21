@@ -21,7 +21,7 @@ README「Hosted Agent移行時のOBOの扱い」参照）ため、このステ�
 使い方:
     1. Hosted Agentをローカルで起動（`azd ai agent run`）、または既にデプロイ済みの
        エンドポイントを用意する。
-    2. python client_register_obo.py <Hosted AgentのURL>
+    2. python scripts/dev/client_register_obo.py <Hosted AgentのURL>
        - ローカル実行時: http://localhost:8088 のように認証不要でそのまま叩ける。
          このスクリプトは {base_url}/invocations へPOSTする
          （InvocationAgentServerHostのルートは絶対パス /invocations のため）。
@@ -57,9 +57,13 @@ README「Hosted Agent移行時のOBOの扱い」参照）ため、このステ�
 PowerShell環境で実行することを想定している（このサンドボックスでは実行できない）。
 """
 import sys
+from pathlib import Path
 
 import requests
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+# agent/ のモジュール（common など）を共有して使う（エージェント本体と設定を二重に持たないため）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 from obo import sign_in_device_code
 
@@ -71,8 +75,8 @@ _FOUNDRY_INVOKE_SCOPE = "https://ai.azure.com/.default"
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("使い方: python client_register_obo.py <Hosted AgentのURL>")
-        print("例:     python client_register_obo.py http://localhost:8088")
+        print("使い方: python scripts/dev/client_register_obo.py <Hosted AgentのURL>")
+        print("例:     python scripts/dev/client_register_obo.py http://localhost:8088")
         sys.exit(1)
 
     base_url = sys.argv[1].rstrip("/")

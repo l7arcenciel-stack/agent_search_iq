@@ -154,7 +154,7 @@ def search_documents(
 
 
 if __name__ == "__main__":
-    # 使い方: python search_tool.py "質問文" [groupA,groupB,...]
+    # 使い方: python agent/search_tool.py "質問文" [groupA,groupB,...]
     # 第2引数を省略すると common.CURRENT_USER_GROUPS（.envのCURRENT_USER_GROUPS、
     # 既定は all-employees）が使われる。
     q = sys.argv[1] if len(sys.argv) > 1 else "製品A001の品質基準について教えて"

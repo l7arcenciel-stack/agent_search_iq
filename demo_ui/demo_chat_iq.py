@@ -39,7 +39,7 @@ demo_chat_iq.py — agent-search-iq（Fabric IQ 搭載版）用のデモUI（Str
 
 【起動方法】
     pip install -r requirements-demo.txt
-    streamlit run demo_chat_iq.py
+    streamlit run demo_ui/demo_chat_iq.py
 
 【セキュリティ上の注意】
   アクセストークン・user_assertion は画面にも標準出力にも出さない。
@@ -49,10 +49,15 @@ demo_chat_iq.py — agent-search-iq（Fabric IQ 搭載版）用のデモUI（Str
 import json
 import os
 import tempfile
+import sys
+from pathlib import Path
 
 import msal
 import requests
 import streamlit as st
+
+# agent/ のモジュール（common など）を共有して使う（エージェント本体と設定を二重に持たないため）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agent"))
 
 from common import (
     FOUNDRY_PROJECT_ENDPOINT,

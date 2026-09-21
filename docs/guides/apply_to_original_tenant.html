@@ -372,7 +372,7 @@ Fabric のオントロジー（Fabric IQ）を使った検証を進めており�
 
     <div class="silent-item">
       <h4><span class="n">D</span>既存エージェントを再デプロイしない</h4>
-      <p>既存エージェントの <span class="path">requirements.txt</span> は <code>&gt;=</code> 指定で、<span class="path">azure.yaml</span> が <code>remote_build</code>。<b>次に再デプロイした瞬間に未検証の最新パッケージが入る。</b>コードを1行も変えていなくても挙動が変わりうる。</p>
+      <p>既存エージェントの <span class="path">agent_search_hosted/requirements.txt</span> は <code>&gt;=</code> 指定で、<span class="path">azure.yaml</span> が <code>remote_build</code>。<b>次に再デプロイした瞬間に未検証の最新パッケージが入る。</b>コードを1行も変えていなくても挙動が変わりうる。</p>
       <p class="fix">→ <b>既存エージェントには <code>azd deploy</code> を打たない。</b>どうしても必要になったら、先にバージョンを固定してから。</p>
     </div>
 
@@ -407,10 +407,10 @@ azd env list</pre>
       <tbody>
         <tr><td>PySpark ノートブック <span class="path">fabric_notebooks/01_create_delta_tables.py</span></td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>そのまま使える。テーブル名・列名の制約は新テナントで検証済み。末尾の自動チェックもそのまま効く</td></tr>
         <tr><td>セマンティックモデルの定義 <span class="path">fabric_notebooks/02_create_semantic_model.py</span></td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td><b>環境変数を差し替えて実行するだけ</b>で同じモデルが再現できる（TMSL をコードで持っているため）。ポータルで手作業すると写し間違いが起きる</td></tr>
-        <tr><td><span class="path">fabric_schema.py</span>（メジャー・列の Allowlist）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>01 / 02 をそのまま流すなら<b>無変更で済む</b>（3ファイルで名前が揃っているため）。元テナントの既存モデルに合わせる場合のみ書き直しが必要</td></tr>
+        <tr><td><span class="path">agent/fabric_schema.py</span>（メジャー・列の Allowlist）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>01 / 02 をそのまま流すなら<b>無変更で済む</b>（3ファイルで名前が揃っているため）。元テナントの既存モデルに合わせる場合のみ書き直しが必要</td></tr>
         <tr><td>オントロジーの定義（エンティティ・リレーション・バインド）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td><b>API で書ける</b>（定義スキーマが公開されている）。アイテム自体は新規作成になるが、定義はスクリプトで流し込める。<br><b>バインド先の <code>workspaceId</code> / <code>itemId</code> は元テナントの値に差し替える</b>（新テナントのレイクハウスを指したままにしない）</td></tr>
-        <tr><td><code>AGENT_INSTRUCTIONS</code>（<span class="path">main.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>コード変更なし</td></tr>
-        <tr><td>デモUI（<span class="path">demo_chat_iq.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>環境変数だけ差し替える</td></tr>
+        <tr><td><code>AGENT_INSTRUCTIONS</code>（<span class="path">agent/main.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>コード変更なし</td></tr>
+        <tr><td>デモUI（<span class="path">demo_ui/demo_chat_iq.py</span>）</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>環境変数だけ差し替える</td></tr>
         <tr><td>確認する質問セット・期待結果</td><td class="yes">✔</td><td class="no">—</td><td class="no">—</td><td>データが同じなら期待結果も同じ</td></tr>
         <tr class="must-differ"><td>アプリ登録①②</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td><b>既存アプリを流用しない</b>（§2 B）</td></tr>
         <tr class="must-differ"><td>グループID・クライアントID・シークレット</td><td class="no">—</td><td class="yes">✔</td><td class="no">—</td><td>テナントが違えば GUID も違う</td></tr>
@@ -472,7 +472,7 @@ azd env list</pre>
         <li>インデックスを作成し、文書を投入する。</li>
         <li>入った <code>acl_groups</code> が GUID になっていることを1件取り出して確認する。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd><code>python search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で返り、<code>&lt;全社員のGUID&gt;</code> では 0 件。<br><b>既存インデックスの文書数・内容が変わっていないこと</b>も Azure ポータルで確認する。</dd>
+      <dt>確認方法</dt><dd><code>python agent/search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で返り、<code>&lt;全社員のGUID&gt;</code> では 0 件。<br><b>既存インデックスの文書数・内容が変わっていないこと</b>も Azure ポータルで確認する。</dd>
       <dt>落とし穴</dt><dd><b>既存インデックス名を打ち間違えて上書き投入すると、凍結デモが壊れる。</b>投入前に <code>AZURE_SEARCH_INDEX_NAME</code> の値を目視する。<br>ALL_EMPLOYEES_GROUP_ID を変えたら<b>再投入が必要</b>（acl_groups は投入時点の値を焼き付ける）。<br>参考: <a href="new_tenant_setup.html#s4-5">新テナント手順書 4-5</a></dd>
     </dl>
   </div>
@@ -517,11 +517,11 @@ azd env list                               # ★選択中(*)を確認</pre>
     <label class="step-head"><input type="checkbox"><span class="step-no">4-6</span><span class="step-title">Fabric IQ ツール（接続）を作り、Toolbox を作成する</span><span class="badge b-admin">管理者待ち</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>既存の Foundry プロジェクトの中に、新エージェント用の Fabric IQ 経路を作る。</dd>
-      <dt>どこで</dt><dd>Foundry ポータル <span class="path">ビルド &gt; ツール</span>（「接続」画面ではない）、<span class="path">setup_toolbox.py</span></dd>
+      <dt>どこで</dt><dd>Foundry ポータル <span class="path">ビルド &gt; ツール</span>（「接続」画面ではない）、<span class="path">scripts/setup/setup_toolbox.py</span></dd>
       <dt>手順</dt><dd><ol>
         <li><span class="path">ビルド &gt; ツール</span> で Fabric IQ を選び、元テナントのオントロジーの MCP URL を入れる。認証は既定の「OAuth ID パススルー」のまま。</li>
         <li>詳細画面の「プロジェクト接続 ID」を控える。</li>
-        <li><code>FABRIC_IQ_TOOLBOX_NAME</code> を<b>既存と混ざらない名前</b>にして <code>python setup_toolbox.py</code> を実行する。</li>
+        <li><code>FABRIC_IQ_TOOLBOX_NAME</code> を<b>既存と混ざらない名前</b>にして <code>python scripts/setup/setup_toolbox.py</code> を実行する。</li>
         <li>出力された MCP エンドポイントを控える。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>ツールの詳細画面に接続 ID が表示され、Toolbox の MCP エンドポイントが出力される。</dd>
@@ -570,7 +570,7 @@ azd env list                               # ★選択中(*)を確認</pre>
         <tr><td><code>AZURE_OPENAI_*</code></td><td>既存の埋め込みモデル</td><td>既存と同じ値</td></tr>
         <tr><td><code>AI_FOUNDRY_PROJECT_ENDPOINT</code> / <code>AI_FOUNDRY_MODEL</code></td><td>既存の Foundry プロジェクト</td><td>既存と同じ値（プロジェクトを流用）</td></tr>
         <tr><td><code>FABRIC_WORKSPACE_ID</code> / <code>FABRIC_DATASET_ID</code></td><td>4-5 で作った新しいワークスペース／Direct Lake モデル</td><td><b>別の値。</b>既存のインポートモードのモデルではない</td></tr>
-        <tr><td><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code></td><td>4-6 の <span class="path">setup_toolbox.py</span> の出力</td><td>既存には無い</td></tr>
+        <tr><td><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code></td><td>4-6 の <span class="path">scripts/setup/setup_toolbox.py</span> の出力</td><td>既存には無い</td></tr>
         <tr><td><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code></td><td>4-6 の接続</td><td>既存には無い</td></tr>
         <tr><td><code>FABRIC_IQ_ONTOLOGY_WORKSPACE_ID</code> / <code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code></td><td>4-5 のオントロジーの URL</td><td>既存には無い</td></tr>
         <tr><td><code>FOUNDRY_CALL_AS</code></td><td><code>user</code> のまま</td><td>既存には無い。<b>変えない</b></td></tr>
@@ -587,7 +587,7 @@ azd env list                               # ★選択中(*)を確認</pre>
     <label class="step-head"><input type="checkbox"><span class="step-no">6-1</span><span class="step-title">新エージェントで2人の比較が期待どおりになること</span><span class="badge b-self">自分で可</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>権限差のデモが元テナントでも成立していることを確認する。</dd>
-      <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_chat_iq.py</code>（新エージェント用の <span class="path">.env</span>）</dd>
+      <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_ui/demo_chat_iq.py</code>（新エージェント用の <span class="path">.env</span>）</dd>
       <dt>手順</dt><dd><ol>
         <li>2つのブラウザ（通常＋シークレット）で、品質チーム所属／未所属の2人としてサインインする。</li>
         <li>各ユーザーで一度質問し、Fabric IQ の同意リンクを踏んでおく。</li>
@@ -641,7 +641,7 @@ azd env list                               # ★選択中(*)を確認</pre>
   </div>
 
   <footer>
-    <p>関連: <a href="new_tenant_setup.html">新テナント再構築 手順書</a> ／ <a href="tenant_config_record.md">テナント設定の記録テンプレート</a></p>
+    <p>関連: <a href="new_tenant_setup.html">新テナント再構築 手順書</a> ／ <a href="../records/tenant_config_record.md">テナント設定の記録テンプレート</a></p>
     <p>この手順書は、新テナントでの検証が終わっていることを前提にしているため、<b>独自の【要確認】項目は持たない</b>。仕様上の未確認事項は <a href="new_tenant_setup.html#s8">新テナント手順書の §8（13件）</a> に集約してある。新テナントで解消しきれなかったものがあれば、元テナントでの作業前にそちらを確認する。</p>
     <p>この手順書に<b>実在の値（テナントID・クライアントID・シークレット・キー・グループID）は書かれていない</b>。依頼文の <code>&lt;...&gt;</code> は送信前に埋める。シークレットはメール本文に書かず、Key Vault 等の安全な経路で受け渡す。</p>
   </footer>

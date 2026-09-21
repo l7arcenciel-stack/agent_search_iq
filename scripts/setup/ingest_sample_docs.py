@@ -1,9 +1,9 @@
 """
 AI Search のインデックスを作り、corpus_data.py の架空製品の文書を投入する。
 
-    python ingest_sample_docs.py --dry-run     # 投入予定の文書と ACL を表示するだけ
-    python ingest_sample_docs.py               # インデックスが無ければ作り、文書を upsert
-    python ingest_sample_docs.py --recreate    # インデックスを作り直してから投入
+    python scripts/setup/ingest_sample_docs.py --dry-run     # 投入予定の文書と ACL を表示するだけ
+    python scripts/setup/ingest_sample_docs.py               # インデックスが無ければ作り、文書を upsert
+    python scripts/setup/ingest_sample_docs.py --recreate    # インデックスを作り直してから投入
 
 必要な環境変数（common.py が読む）:
     AZURE_SEARCH_ENDPOINT / AZURE_SEARCH_API_KEY / AZURE_SEARCH_INDEX_NAME
@@ -31,6 +31,10 @@ AI Search のインデックスを作り、corpus_data.py の架空製品の文�
 import argparse
 import re
 import sys
+from pathlib import Path
+
+# agent/ のモジュール（common など）を共有して使う（エージェント本体と設定を二重に持たないため）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 from common import (
     ALL_EMPLOYEES_GROUP_ID,

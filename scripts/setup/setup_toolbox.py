@@ -17,7 +17,7 @@ Fabric IQ（オントロジー）の Toolbox を Foundry プロジェクトに�
     set FABRIC_IQ_PROJECT_CONNECTION_ID=<接続ID>
     set FABRIC_IQ_ONTOLOGY_WORKSPACE_ID=<オントロジーのあるワークスペースID>
     set FABRIC_IQ_ONTOLOGY_ITEM_ID=<オントロジーのアイテムID>
-    python setup_toolbox.py
+    python scripts/setup/setup_toolbox.py
 
   ワークスペースID・アイテムIDは、オントロジーを開いたときのURL
       https://app.fabric.microsoft.com/groups/<workspace-ID>/ontologies/<ontology-item-ID>
@@ -33,10 +33,14 @@ Fabric IQ（オントロジー）の Toolbox を Foundry プロジェクトに�
 """
 import os
 import sys
+from pathlib import Path
 
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import FabricIQPreviewToolboxTool
 from azure.identity import DefaultAzureCredential
+
+# agent/ のモジュール（common など）を共有して使う（エージェント本体と設定を二重に持たないため）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 from common import FOUNDRY_PROJECT_ENDPOINT
 

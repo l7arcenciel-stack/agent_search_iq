@@ -1,8 +1,8 @@
 # ナレッジ集：Fabric IQ 権限デモを新テナントで組んで分かったこと
 
 新テナント（Japan East）での構築（2026-09-20〜21）で得た知見を、**テーマ別に**まとめたもの。
-時系列の記録は [operations_log.md](operations_log.md)、手順は [new_tenant_setup.html](new_tenant_setup.html)、
-元テナントへの反映は [apply_to_original_tenant.html](apply_to_original_tenant.html)。
+時系列の記録は [operations_log.md](operations_log.md)、手順は [new_tenant_setup.html](../guides/new_tenant_setup.html)、
+元テナントへの反映は [apply_to_original_tenant.html](../guides/apply_to_original_tenant.html)。
 
 - 【確認済】= 実機または公式ドキュメントで確認した事実
 - 【要確認】= まだ確かめていないこと
@@ -108,21 +108,21 @@
   **データ（`raw.Fields` / `raw.Value`）は取れている**のに、エージェントが「403」を権限不足と誤読した → `false` にする
 - 取得できなかった項目を**推測で埋める**ことがあった（製品名を商品群名として回答）。指示で禁止する
 - **製品から売上を求める質問（「A008の商品群の売上」）で Fabric IQ を呼ばず、売上ツールを製品IDで直接絞ろうとした。**指示とツール説明に「Fabric IQ で商品群コード → そのコードで照会」の手順を書き、売上ツールの列から製品を外したら、2人とも Fabric IQ → 売上の順に呼ぶようになった【確認済】
-- 以上は `main.py` の `AGENT_INSTRUCTIONS` に反映済み。より根本的には説明欄に日本語の同義語を書く【要確認：効果未検証】
+- 以上は `agent/main.py` の `AGENT_INSTRUCTIONS` に反映済み。より根本的には説明欄に日本語の同義語を書く【要確認：効果未検証】
 
 ## 4. セマンティックモデル（Direct Lake）【確認済】
 
 - 作成 API は **TMSL（`model.bim`）しか受け付けない**。TMDL で投げると `Workload_FailedToParseFile`。一方 `getDefinition` は **TMDL で返る**
 - レイクハウスから作れば全テーブル `mode: directLake`。接続は `Sql.Database("<SQLエンドポイント>", "<SQLエンドポイントID>")`
 - 売上のファクトが複数あるときは、メジャー名に集計軸を含める（`商品群売上金額` / `拠点売上金額`）。「売上金額」で統一すると誤った組み合わせで空の結果になる
-- 01（テーブル）/ 02（モデル）/ 03（オントロジー）/ `fabric_schema.py` の名前は常に一致させる
+- 01（テーブル）/ 02（モデル）/ 03（オントロジー）/ `agent/fabric_schema.py` の名前は常に一致させる
 - このデモのモデルは **`lh_public` の SQL エンドポイント**に接続し、**RLS のロールは無い**＝売上は全員が同じ結果になる設計（README の期待結果どおり）
 - 本人のトークンで `executeQueries` を呼ぶには、モデルへの**読み取り＋ビルド（ReadExplore）**が要る。
   **ワークスペースの閲覧者にはビルドが付かず**、`404 PowerBIEntityNotFound`（not found or you do not have permission）になる。
   エージェントはこれを「閲覧権限がない」と回答する。**ビルドを付けると解消**【確認済】
 - ポータルの「権限の管理」でユーザーを追加すると、既定で**書き込み・再共有**まで付く。デモユーザーには**読み取り＋ビルドだけ**にする
 - 閲覧ユーザーが **Power BI 無料版のままでも、F2 上のモデルに本人トークンで DAX 照会できた**【確認済】
-- **product → product_group は多対一で、絞り込みは product_group → product の向きにしか伝わらない。**`product[product_id]` で絞って `商品群売上金額` を出すと、エラーにならず**全商品群の行が返る**（誤答の元）。このため `fabric_schema.py` の列から製品を外した【確認済】
+- **product → product_group は多対一で、絞り込みは product_group → product の向きにしか伝わらない。**`product[product_id]` で絞って `商品群売上金額` を出すと、エラーにならず**全商品群の行が返る**（誤答の元）。このため `agent/fabric_schema.py` の列から製品を外した【確認済】
 
 ## 5. Foundry と azd
 
@@ -138,7 +138,7 @@
   - ツール内の想定外の例外や引数検証の失敗も、すべて `Function failed.` になる。ツールの中で例外を捕まえて中身を返すと原因を追える
   - ローカルで `await main.query_fabric_tool.invoke(arguments={...})` を呼べば、デプロイせずに再現できる
 - デモ UI の「処理詳細を見る」に、各ツールの**引数と結果**を表示するようにした。セッションが休止するとログ（`azd ai agent monitor`）は取れなくなるので、画面で見るほうが早い
-- リポジトリ直下の大きなファイルはリモートビルドに送られる → `.agentignore` で除外【確認済】
+- `azure.yaml` の `project` フォルダの中身はすべてリモートビルドに送られる【確認済】。以前はリポジトリ直下が project で、手元のインストーラ（`*.msi`）まで送られていた → project を `agent/` に分けた（2026-09-22）
 - ログは `azd ai agent sessions list <agent>` → `azd ai agent monitor <agent> --session-id <id> --tail 300`
 - プロジェクトの Bicep デプロイは、既存アカウントへの追加時に `RequestConflict`（一時的）になることがある。再実行で通る【確認済】
 

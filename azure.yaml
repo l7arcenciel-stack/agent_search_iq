@@ -12,7 +12,7 @@ name: agent-search-iq
 
 services:
     agent-search-iq:
-        project: .
+        project: agent   # エージェント本体のフォルダ（ここだけがビルドに送られる）
         host: azure.ai.agent
         language: python
 

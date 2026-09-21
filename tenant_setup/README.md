@@ -4,7 +4,7 @@
 新テナントで手作業／ワンショットのコマンドで行った操作を、元テナントでもそのまま
 （あるいは管理者に渡して）再実行できる形にしたもの。
 
-エージェント本体からは import されず、`.agentignore` でデプロイ対象から外してある。
+エージェント本体からは import されず、`agent/` の外にあるのでデプロイ対象にも入らない。
 すべて手元の PC で実行する（`az login` 済みであること）。
 
 ## 共通の約束
@@ -34,8 +34,8 @@
 | 8 | **ポータル** | レイクハウスとオントロジーへの読み取り付与（API 非対応） | アイテムの管理者 |
 | 9 | `tenant_setup/40_foundry_rbac.py` | Foundry のロール割り当て | プロジェクトの所有者／ユーザーアクセス管理者 |
 | 10 | **ポータル** | Foundry の **ビルド > ツール** で Fabric IQ ツールを作成 | Foundry Project Manager |
-| 11 | `setup_toolbox.py` | Toolbox | 同上 |
-| 12 | `ingest_sample_docs.py` | AI Search のインデックス作成と文書投入（グループIDが GUID でなければ拒否） | Search の管理キー |
+| 11 | `scripts/setup/setup_toolbox.py` | Toolbox | 同上 |
+| 12 | `scripts/setup/ingest_sample_docs.py` | AI Search のインデックス作成と文書投入（グループIDが GUID でなければ拒否） | Search の管理キー |
 | 13 | `azd deploy` | エージェント本体（azd 環境に `AZURE_AI_PROJECT_ID` と `FOUNDRY_PROJECT_ENDPOINT` も必要） | Foundry Project Manager |
 
 いつでも `fabric_notebooks/00_check_status.py` で現状を点検できる。

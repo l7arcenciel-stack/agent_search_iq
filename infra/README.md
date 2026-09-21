@@ -17,10 +17,10 @@ Foundryプロジェクト(`AI_FOUNDRY_PROJECT_ENDPOINT` が指す先)が存在�
 作らない(ARM/Bicepで管理できない・別途手動が必要):
 - Entra IDアプリ登録(OBO用・Fabric IQ接続用)、委任権限の管理者同意
 - Fabricワークスペース・セマンティックモデル・オントロジー(Fabricポータル/REST APIの領域)
-- Foundryポータル上のFabric IQ Connection、Toolbox(`setup_toolbox.py`)
+- Foundryポータル上のFabric IQ Connection、Toolbox(`scripts/setup/setup_toolbox.py`)
 - 各アカウントでのOAuth同意
 
-これらの手順は `../docs/azure-resources-report.html` のセットアップ順序を参照。
+これらの手順は `../docs/reports/azure-resources-report.html` のセットアップ順序を参照。
 
 ## 使い方
 

@@ -1,0 +1,52 @@
+# Files excluded from agent code deployment packaging.
+# Uses .gitignore syntax.
+# Note: only the root .agentignore is read; subdirectory files are not supported.
+#
+# To include a file that is excluded by default, use negation: !filename
+
+# azd tooling files
+agent.yaml
+agent.manifest.yaml
+azure.yaml
+connection.yaml
+connection.yml
+toolbox.yaml
+toolbox.yml
+.agentignore
+appPackage.zip
+.appPackage.zip.azd-generated
+TEAMS_APP_SETUP.md
+
+# Security / secrets
+.env
+.env.*
+.azure/
+.git/
+
+# Python
+__pycache__/
+.venv/
+venv/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Node
+node_modules/
+
+# Docker (not used in code deploy)
+Dockerfile
+.dockerignore
+
+# デモUI・準備用スクリプト・Fabric のノートブック・テナント準備・手順書・IaC は
+# agent/ の外に置いたので、ここで除外する必要はない（azure.yaml の project が agent/）。
+# agent/ に一時ファイルを置いたときのために残しておく
+*.msi

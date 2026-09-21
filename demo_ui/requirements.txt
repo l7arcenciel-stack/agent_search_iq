@@ -1,11 +1,11 @@
 # ローカルデモ用（demo_chat_iq.py）の追加依存。
 #
 # Hosted Agent本体（azd deploy でデプロイされるコンテナ）には含めない。
-# demo_chat_iq.py はデプロイパッケージから除外している（.agentignore参照）ため、
+# demo_chat_iq.py は agent/ の外にありデプロイパッケージに含まれないため、
 # streamlitもHosted Agent用のrequirements.txtには追加しない。
 #
 # 使い方（手元PCで、Hosted Agentとは別にローカルでデモを動かす場合のみ）:
-#     pip install -r requirements-demo.txt
-#     streamlit run demo_chat_iq.py
--r requirements.txt
+#     pip install -r demo_ui/requirements.txt   （agent/requirements.txt も一緒に入る）
+#     streamlit run demo_ui/demo_chat_iq.py
+-r ../agent/requirements.txt
 streamlit>=1.38.0

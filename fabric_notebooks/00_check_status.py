@@ -308,7 +308,7 @@ def _print_todo(todo: list, env_lines: list) -> None:
             print(f"  {i}. {t}")
     else:
         print("  構築済みの項目に不足はありません。")
-        print("  残りの工程は docs/new_tenant_setup.html の §5 以降（Foundry 接続 →")
+        print("  残りの工程は docs/guides/new_tenant_setup.html の §5 以降（Foundry 接続 →")
         print("  Toolbox → azd deploy → 2人で比較）を参照。")
 
     print("\n  ※ 権限付与はポータル作業（API 非対応）:")

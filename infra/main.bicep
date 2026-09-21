@@ -6,7 +6,7 @@
 // `az deployment group create` から単独で実行する。azd の provider は変更しない。
 //
 // Entra IDアプリ登録・Fabricワークスペース/セマンティックモデル/オントロジー・Fabric IQ接続・
-// OAuth同意は ARM では管理できないため対象外(README / docs/azure-resources-report.html 参照)。
+// OAuth同意は ARM では管理できないため対象外(README / docs/reports/azure-resources-report.html 参照)。
 //
 // 使い方:
 //   az group create -n rg-agent-search-iq -l japaneast

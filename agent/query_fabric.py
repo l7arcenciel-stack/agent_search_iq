@@ -161,7 +161,7 @@ def query_fabric(plan: dict, access_token: str | None = None) -> dict:
 
 
 if __name__ == "__main__":
-    # 使い方: python query_fabric.py '{"measures": ["売上金額"], "group_by": ["地域名称"]}'
+    # 使い方: python agent/query_fabric.py '{"measures": ["売上金額"], "group_by": ["地域名称"]}'
     # 引数省略時は「地域別の売上金額」で試す
     if len(sys.argv) > 1:
         plan = json.loads(sys.argv[1])

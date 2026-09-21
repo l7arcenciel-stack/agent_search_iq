@@ -186,7 +186,7 @@ def resolve_user_groups(graph_token: str) -> list[str]:
 
 
 if __name__ == "__main__":
-    # 使い方: python obo.py
+    # 使い方: python agent/obo.py
     # デバイスコードでサインイン → Graph/Power BIトークン交換 → グループ解決、までを
     # このモジュール単体で実演する（Hosted Agentを介さない、ロジック単体の疎通確認用）。
     # 実際にHosted Agentへユーザートークンを登録する場合は client_register_obo.py を使う。

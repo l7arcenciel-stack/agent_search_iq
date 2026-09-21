@@ -2,7 +2,7 @@
 
 新テナントの構築で、**何を・どうやって・なぜ**実行したかの時系列の記録。
 結果とハマった点も併記する。手順としてまとめ直したものは
-[new_tenant_setup.html](new_tenant_setup.html)、再実行できる形にしたものは
+[new_tenant_setup.html](../guides/new_tenant_setup.html)、再実行できる形にしたものは
 `tenant_setup/` と `fabric_notebooks/` にある。
 
 - 期間: 2026-09-20 〜 2026-09-21
@@ -546,6 +546,30 @@ azd env get-values > .env        # ※ BOM なしで書き直した（下記）
 - 3問目は2人とも Fabric IQ で A008 → PG01（樹脂部品）を取得 → `商品群コード = PG01` で売上を照会（1行）
 - 最終的な権限：2人とも**ワークスペース閲覧者＋セマンティックモデルのビルド**、Foundry は **Foundry Agent Consumer** のまま。
   Fabric ライセンスは Power BI 無料版のまま
+
+---
+
+## 19. 容量を試用に戻し、フォルダ構成を整理（2026-09-22）
+
+- デモ確認が終わったので **F2 を停止し、ワークスペースを試用容量に戻した**。試用容量では Fabric IQ の自然文検索が動かないため、
+  デモ UI の3問目（Fabric IQ を使う部分）は失敗する。Fabric IQ を確認・デモするときだけ F2 に戻す
+- リポジトリ直下に .py が14本並んでいたのを、役割ごとに分けた（`git mv` で履歴は保持）
+
+| 旧 | 新 |
+|---|---|
+| `main.py` `obo.py` `common.py` `corpus_data.py` `search_tool.py` `query_fabric.py` `fabric_client.py` `fabric_schema.py` `requirements.txt` `.agentignore` | `agent/` |
+| `demo_chat_iq.py` / `requirements-demo.txt` | `demo_ui/demo_chat_iq.py` / `demo_ui/requirements.txt` |
+| `setup_toolbox.py` `ingest_sample_docs.py` | `scripts/setup/` |
+| `client_register_obo.py` `client_test_responses_session.py` | `scripts/dev/` |
+| `docs/new_tenant_setup.html` `docs/apply_to_original_tenant.html` | `docs/guides/` |
+| `docs/knowledge.md` `docs/operations_log.md` `docs/tenant_config_record.md` | `docs/records/` |
+| `docs/azure-resources-report.html` `docs/deployment-status-report.html` | `docs/reports/` |
+
+- `azure.yaml` の `project` を `.` → `agent` に変更。ビルドに送られるのは `agent/` だけになった
+- `demo_ui/` と `scripts/` は `sys.path` に `agent/` を足して `common` などを import する。`.env` はリポジトリ直下のまま（`agent/common.py` の `load_dotenv()` が上位のフォルダを探して見つける）
+- 確認：全ファイルのコンパイル、`agent/main.py` の import と絞り込み付きツール呼び出し、各スクリプトの import、デモ UI の起動（Streamlit AppTest でサインイン画面まで）
+- **`azd deploy`（`project: agent`）後、F2 に載せてデモ UI で3問目を2人で確認 → 期待どおり**（§18-4 と同じ結果。Fabric IQ で A008 → PG01、売上 502,320,000 円、次郎は品質文書の欠落を明示）
+- この記録（§1〜§18）に出てくるパスは当時のもの（書き換えていない）
 
 ---
 

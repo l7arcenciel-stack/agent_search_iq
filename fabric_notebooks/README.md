@@ -1,8 +1,8 @@
 # fabric_notebooks
 
 **Fabric のリソースを作るコード。**
-エージェント本体（`main.py`）からは一切 import されず、デプロイパッケージにも含まれない
-（`.agentignore` でディレクトリごと除外している）。
+エージェント本体（`agent/main.py`）からは一切 import されず、デプロイパッケージにも含まれない
+（`azure.yaml` の `project` は `agent/` なので、このフォルダはビルドに送られない）。
 
 ## ファイル
 
@@ -84,7 +84,7 @@ python fabric_notebooks/03_create_ontology_definition.py
 |---|---|
 | `01_create_delta_tables.py` | Spark スキーマ（テーブル名・列名・型） |
 | `02_create_semantic_model.py` | TMSL の `TABLES` / `MEASURES` / `RELATIONSHIPS` |
-| `../fabric_schema.py` | Agent に見せる日本語の表示名 → DAX 識別子の対応 |
+| `../agent/fabric_schema.py` | Agent に見せる日本語の表示名 → DAX 識別子の対応 |
 
 ## なぜ書き方に制約があるか
 
@@ -92,7 +92,7 @@ Fabric Ontology のデータバインドは、**制約を破ってもエラー�
 「バインドはできたのに値が全部 null」「テーブルが選択肢に出てこない」という形でしか
 現れないため、原因の切り分けに時間がかかる。
 
-そこで各ノートブックは次を守って書く。詳細は `docs/new_tenant_setup.html` の 4-1 を参照。
+そこで各ノートブックは次を守って書く。詳細は `docs/guides/new_tenant_setup.html` の 4-1 を参照。
 
 - 金額など数値は `DoubleType`（`DecimalType` はバインド後に null になる）
 - テーブル名・列名は ASCII の snake_case（日本語の表示名は「列の値」として持たせる）

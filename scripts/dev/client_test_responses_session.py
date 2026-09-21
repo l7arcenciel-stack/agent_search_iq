@@ -22,10 +22,10 @@ Responsesリクエストのbodyに明示的に含めることで、**同一セ�
   次のステップ（Responses側でuser_id・cache hit/missをログ出力して確認）に進む。
 
 使い方:
-    python client_test_responses_session.py <agent_session_id> [追加の質問文]
+    python scripts/dev/client_test_responses_session.py <agent_session_id> [追加の質問文]
 
     例:
-        python client_test_responses_session.py 06eb5167c268fb230008akIccD3SyEeBQ65VUo1FOkimGneTfs
+        python scripts/dev/client_test_responses_session.py 06eb5167c268fb230008akIccD3SyEeBQ65VUo1FOkimGneTfs
 
     質問文を省略した場合は「製品A008の品質基準について教えて」を送る。
     Responsesエンドポイントは環境変数から組み立てる（テナント・プロジェクトを
@@ -40,9 +40,13 @@ scope=https://ai.azure.com/.default、DefaultAzureCredential）を使う。ト�
 import json
 import os
 import sys
+from pathlib import Path
 
 import requests
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+# agent/ のモジュール（common など）を共有して使う（エージェント本体と設定を二重に持たないため）
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "agent"))
 
 from common import FOUNDRY_PROJECT_ENDPOINT, IQ_AGENT_NAME
 
@@ -60,9 +64,9 @@ _DEFAULT_QUESTION = "製品A008の品質基準について教えて"
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("使い方: python client_test_responses_session.py <agent_session_id> [質問文]")
+        print("使い方: python scripts/dev/client_test_responses_session.py <agent_session_id> [質問文]")
         print(
-            "例:     python client_test_responses_session.py "
+            "例:     python scripts/dev/client_test_responses_session.py "
             "06eb5167c268fb230008akIccD3SyEeBQ65VUo1FOkimGneTfs"
         )
         sys.exit(1)

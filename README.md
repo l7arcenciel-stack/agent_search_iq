@@ -8,20 +8,46 @@
 OBO 登録（Invocations）、Tool Call Limit middleware、`_OBO_CACHE` の設計と経緯は
 `agent_search_hosted/README.md` と同一なので、そちらを参照。
 
-`fabric_notebooks/` は **Fabric のノートブック上で実行する PySpark**（オントロジーにバインドする
-Delta テーブルの作成）。エージェント本体からは import されず、`.agentignore` でデプロイ対象外。
-書き方の決まりは `fabric_notebooks/README.md` を参照。
+## フォルダ構成
 
-`tenant_setup/` は **テナント側の準備**（Entra のグループ・ユーザー・アプリ登録と管理者同意、
-Fabric のワークスペース・レイクハウス・オントロジー、Foundry のロール）を行うスクリプト。
-すべて `--dry-run` 付き・冪等。実行順は `tenant_setup/README.md`。
-新テナントで実際に行った操作の記録は [docs/operations_log.md](docs/operations_log.md)、
-テーマ別の知見のまとめは [docs/knowledge.md](docs/knowledge.md)。
+```
+agent_search_iq/
+├─ agent/                 デプロイされるエージェント本体（azure.yaml の project）
+│   ├─ main.py            エントリポイント（ツール定義・AGENT_INSTRUCTIONS・OBO 登録）
+│   ├─ search_tool.py     AI Search（文書）
+│   ├─ query_fabric.py    売上の照会（Query Plan → DAX）
+│   ├─ fabric_client.py   Power BI executeQueries の呼び出し
+│   ├─ fabric_schema.py   売上ツールに見せるメジャー・列の Allowlist
+│   ├─ obo.py             On-Behalf-Of のトークン交換
+│   ├─ common.py          環境変数（リポジトリ直下の .env を読む）
+│   ├─ corpus_data.py     サンプル文書と ACL
+│   ├─ requirements.txt   エージェントの依存（版を固定）
+│   └─ .agentignore
+├─ demo_ui/               2人で見比べるデモ UI（Streamlit）
+│   ├─ demo_chat_iq.py
+│   └─ requirements.txt   デモ UI の追加依存
+├─ scripts/
+│   ├─ setup/             一度だけ実行する準備（Toolbox 作成・AI Search への文書投入）
+│   └─ dev/               動作確認用のクライアント
+├─ tenant_setup/          テナント側の準備（Entra・Fabric・Foundry のロール）。--dry-run 付き・冪等
+├─ fabric_notebooks/      Fabric 上で実行する PySpark とモデル・オントロジー定義の作成
+├─ infra/                 Bicep（Foundry・AI Search・Fabric 容量）
+├─ docs/
+│   ├─ guides/            手順書（新テナントでの構築／元テナントへの反映）
+│   ├─ records/           ナレッジ・作業記録・テナント設定の記録
+│   └─ reports/           Azure リソース・デプロイ状況のレポート
+├─ azure.yaml
+└─ .env.example           .env のひな形（.env はリポジトリ直下に置く）
+```
 
-**別テナントで一式を組み直す場合**は
-[docs/new_tenant_setup.html](docs/new_tenant_setup.html)（新テナントでの再構築手順）と
-[docs/apply_to_original_tenant.html](docs/apply_to_original_tenant.html)（元テナントへの反映手順）、
-記録用テンプレート [docs/tenant_config_record.md](docs/tenant_config_record.md) を参照。
+- `demo_ui/` と `scripts/` は `agent/` のモジュール（`common` など）を import して使う（設定を二重に持たないため）
+- `tenant_setup/` と `fabric_notebooks/` はエージェント本体とは独立（import しない）。実行順はそれぞれの README
+- **まず読むもの**：テーマ別の知見 [docs/records/knowledge.md](docs/records/knowledge.md)。
+  時系列の記録は [docs/records/operations_log.md](docs/records/operations_log.md)
+- **別テナントで一式を組み直す場合**は
+  [docs/guides/new_tenant_setup.html](docs/guides/new_tenant_setup.html)（新テナントでの再構築手順）と
+  [docs/guides/apply_to_original_tenant.html](docs/guides/apply_to_original_tenant.html)（元テナントへの反映手順）、
+  記録用テンプレート [docs/records/tenant_config_record.md](docs/records/tenant_config_record.md) を参照
 
 ---
 
@@ -32,7 +58,7 @@ Fabric のワークスペース・レイクハウス・オントロジー、Foun
 | フォルダ | `agent_search_hosted/` | `agent_search_iq/` |
 | エージェント名 | `agent-search-hosted` | `agent-search-iq` |
 | azd 環境 | 現行の環境 | **`azd env new` で別環境を作る** |
-| デモUI | `demo_chat.py` / `demo_chat_simple.py` | `demo_chat_iq.py` |
+| デモUI | `demo_chat.py` / `demo_chat_simple.py` | `demo_ui/demo_chat_iq.py` |
 
 `azd deploy` の前に**必ず `azd env list` で選択中の環境を確認する**。
 既存環境に誤ってデプロイすると `_OBO_CACHE` が消え、既存デモの全員が再サインインになる。
@@ -41,21 +67,23 @@ Fabric のワークスペース・レイクハウス・オントロジー、Foun
 > `azure.yaml` が `remote_build` のため、**次に再デプロイした瞬間に未検証の最新版が入る**
 > （2026-09-19 時点で agent-framework 1.17.0→1.19.0、foundry-hosting b260903→b260918）。
 > 既存エージェントを再デプロイする場合は、先に版を固定すること。
-> このフォルダの `requirements.txt` は検証済みの版に固定してある。
+> このフォルダの `agent/requirements.txt` は検証済みの版に固定してある。
 
 ---
 
 ## 1. 既存からの変更点
+
+（パスは `agent_search_hosted/` からの差分。このフォルダでは本体は `agent/` にある）
 
 | ファイル | 変更 |
 |---|---|
 | `main.py` | Fabric IQ の Toolbox を `FoundryToolbox` で追加。既存2ツールは**残す**（オントロジー経由と直接照会の答えが一致することを見せるため）。`AGENT_INSTRUCTIONS` を「3ツールの使い分け」と「権限を踏まえた回答方針」に更新。`max_function_calls` 6→8 |
 | `azure.yaml` | エージェント名 `agent-search-iq`。`FABRIC_IQ_TOOLBOX_ENDPOINT` を追加。既存で漏れていた `CURRENT_USER_GROUPS` / `QUALITY_TEAM_GROUP_ID` も追加 |
 | `requirements.txt` | **版を固定**。`azure-ai-projects==2.6.1` を追加 |
-| `setup_toolbox.py` | **新規**。Fabric IQ の Toolbox を作成する一回実行スクリプト |
-| `demo_chat_iq.py` | **新規**。デモUI（後述） |
-| `.agentignore` | デモUI・`setup_toolbox.py` を除外（既存で漏れていた `demo_chat_simple.py` も） |
-| `client_test_responses_session.py` | 接続先 URL を `agent-search-iq` に変更 |
+| `scripts/setup/setup_toolbox.py` | **新規**。Fabric IQ の Toolbox を作成する一回実行スクリプト |
+| `demo_ui/demo_chat_iq.py` | **新規**。デモUI（後述） |
+| `.agentignore` | `agent/` に移したため、ビルドに送られるのは本体だけになった（デモUI・スクリプトは `agent/` の外） |
+| `scripts/dev/client_test_responses_session.py` | 接続先 URL を `agent-search-iq` に変更 |
 
 `search_tool.py` `query_fabric.py` `fabric_client.py` `obo.py` は**無変更**。
 
@@ -134,7 +162,7 @@ Fabric IQ の代替実装（フォールバック）ではない。
    - クライアントシークレット
    - Foundry 接続のリダイレクト URI
 4. Foundry ポータル：Settings > Connections > New connection > **Fabric IQ** → 接続 ID を控える
-5. `python setup_toolbox.py`（冒頭 docstring 参照）→ 表示された MCP エンドポイントを控える
+5. `python scripts/setup/setup_toolbox.py`（冒頭 docstring 参照）→ 表示された MCP エンドポイントを控える
 
 ### 3.3 `FOUNDRY_CALL_AS=user` のための追加設定
 
@@ -143,8 +171,11 @@ Fabric IQ の代替実装（フォールバック）ではない。
    `AADSTS65001`（同意が必要）や `AADSTS650057`（リソース未登録）などで止まる。
    ポータルの「API のアクセス許可 > 所属する組織で使用している API」で該当リソースを探して追加する。
 2. デモに使う**各アカウント**に、Foundry プロジェクト上でエージェントを呼び出せるロール
-   （Foundry User 相当）を割り当てる。無いと 403。
-3. 各アカウントで一度、Fabric IQ 接続の **OAuth 同意**を済ませておく
+   （**Foundry Agent Consumer** で足りる。実機確認済み）を割り当てる。無いと 403。
+3. デモに使う**各アカウント**を Fabric の**ワークスペースの閲覧者**にし、セマンティックモデルに**ビルド**を付ける。
+   無いと Fabric IQ が 403 で全回答が空になる／売上が「閲覧権限がない」になる
+   （[手順書 4-7](docs/guides/new_tenant_setup.html#s4-7)）
+4. 各アカウントで一度、Fabric IQ 接続の **OAuth 同意**を済ませておく
    （デモUIで最初に質問すると同意リンクが出る → 踏む → もう一度質問）。
 
 ### 3.4 デプロイ
@@ -154,15 +185,22 @@ azd env new agent-search-iq            # 既存と別の環境を作る（初回
 azd env list                            # ★必ず確認
 # .env.example を見ながら、既存と同じ値＋Fabric IQ の値を azd env set で登録
 azd env set FABRIC_IQ_TOOLBOX_ENDPOINT "<setup_toolbox.py が出力した URL>"
-azd deploy
+azd deploy                              # azure.yaml の project: agent がビルドされる
 ```
 
 ---
 
 ## 4. デモの手順（2人で見比べる）
 
+```powershell
+.\.venv\Scripts\python -m pip install -r agent\requirements.txt -r demo_ui\requirements.txt   # 初回のみ
+equirements.txt -r demo_ui
+equirements.txt   # 初回のみ
+.\.venv\Scripts\streamlit run demo_ui\demo_chat_iq.py --server.address localhost --server.port 8501
+```
+
 1. ブラウザを2つ開く（通常ウィンドウ＋シークレット、または別プロファイル）
-2. それぞれで `streamlit run demo_chat_iq.py` の画面を開き、**別のアカウントでサインイン**
+2. それぞれで上の画面を開き、**別のアカウントでサインイン**
    （品質チーム所属／未所属）。**デモ開始前に済ませておく**
 3. 各ウィンドウで一度質問し、Fabric IQ の同意リンクが出たら踏んでおく
 4. 本番では、同じ質問を左右で送る
@@ -175,6 +213,10 @@ azd deploy
 | 地域別の売上金額を教えて | 同じ結果 | 同じ結果（権限差が無い質問） |
 | A008の品質情報と、関連する商品群の売上をまとめて | 3経路を統合 | 売上は返り、**品質文書が欠けていることを明示** |
 
+- 3問目は Fabric IQ（A008 → 商品群コード）→ 売上（そのコードで絞り込み）の順に呼ぶ。**試用容量では Fabric IQ の自然文検索が動かない**ので、デモ時は F2 以上に載せる
+- 「処理詳細を見る」に各ツールの引数と結果が出る。期待と違うときはまずここを見る
+- 2人での実機確認の結果は [docs/records/operations_log.md](docs/records/operations_log.md) §18-4
+
 > 各タブは別々に Streamlit セッション・MSAL キャッシュ・`agent_session_id` を持つ。
 > `agent_session_id` ごとに別サンドボックス（＝別プロセス）になる前提で、
 > 2人の `_OBO_CACHE` は混ざらない（agent_search_hosted の実機確認結果に基づく）。
@@ -186,7 +228,7 @@ azd deploy
 実パッケージ（agent-framework 1.19.0 / agent-framework-foundry-hosting 1.0.0b260918 /
 azure-ai-agentserver-core 2.1.0 / azure-ai-agentserver-invocations 1.1.0 / azure-ai-projects 2.6.1）で：
 
-1. `main.py` がダミー環境変数で import でき、`build_agent()` が成功する
+1. `agent/main.py` がダミー環境変数で import でき、`build_agent()` が成功する
 2. `FABRIC_IQ_TOOLBOX_ENDPOINT` 未設定時は既存2ツールのみ、設定時は `FoundryToolbox` が
    `agent.mcp_tools` に入る（MCP ツールは実行時に `FunctionTool` として通常の関数呼び出し
    ループへ合流するため、Tool Call Limit middleware も**構造上は効く**）
@@ -194,12 +236,13 @@ azure-ai-agentserver-core 2.1.0 / azure-ai-agentserver-invocations 1.1.0 / azure
 4. `FoundryToolbox` が `x-agent-foundry-call-id` を転送する実装であること、
    `ResponsesHostServer` が `oauth_consent_request` を返す実装であること（SDK ソース）
 5. `FabricIQPreviewToolboxTool` と `project.toolboxes.create_version(name=, tools=, description=)` の存在
-6. `demo_chat_iq.py` が user / operator 両モードでサインイン画面まで例外なく起動する
+6. `demo_ui/demo_chat_iq.py` が user / operator 両モードでサインイン画面まで例外なく起動する
    （Streamlit AppTest）。operator モードでは警告が出る
 7. 応答解析（`_analyze`）を合成データで確認：3経路取得／文書だけ見えない（部分回答）／
    Fabric IQ 未同意／同じツールを2回呼んで2回目で取得、の4ケースで期待どおりの判定
 
-**実機（Azure）では何も確認していない。** 特に次は実機で見る必要がある。
+**この節の時点（2026-09-19）では実機（Azure）で何も確認していなかった。**次の項目は、その後の実機確認で結論が出ている
+（[docs/records/knowledge.md](docs/records/knowledge.md) を参照）。
 
 - Fabric IQ が本当に「Foundry の呼び出し元」＝サインインした本人として動くか
 - Fabric IQ の MCP サーバーが公開するツール名と、Responses の `output` 上での表現

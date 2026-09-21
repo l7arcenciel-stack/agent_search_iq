@@ -233,7 +233,7 @@
   <p>「部署をまたいで聞けるようにしても、見せてはいけないものは見せない」ことを、<b>権限の違う2人のユーザーが同じ質問を投げて、返ってくる内容が違う</b>という形で見せる。そのデモ一式を、新設した自前テナントの上に作り直す。</p>
 
   <h3>旧テナントとの関係</h3>
-  <p><b>旧テナントの値は一切流用しない。</b>テナントID・アプリ登録のクライアントID・シークレット・グループID・ワークスペースID・接続ID・各種キーは、すべて新しく発行されたものに置き換わる。リポジトリ内のコードはこれらをすべて環境変数から読むようになっているので、<b>コードを書き換える必要はなく、環境変数を入れ替えるだけでよい</b>（例外は <span class="path">fabric_schema.py</span> と <span class="path">azure.yaml</span> のエージェント名。後述）。</p>
+  <p><b>旧テナントの値は一切流用しない。</b>テナントID・アプリ登録のクライアントID・シークレット・グループID・ワークスペースID・接続ID・各種キーは、すべて新しく発行されたものに置き換わる。リポジトリ内のコードはこれらをすべて環境変数から読むようになっているので、<b>コードを書き換える必要はなく、環境変数を入れ替えるだけでよい</b>（例外は <span class="path">agent/fabric_schema.py</span> と <span class="path">azure.yaml</span> のエージェント名。後述）。</p>
 
   <div class="callout danger">
     <b>安全上の注意：テナントが2つになる</b>
@@ -266,7 +266,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
     <div class="dep-arrow">▼</div>
     <div class="dep-row"><span class="dep-tag">4</span><div class="dep-body"><div class="dep-title">レイクハウス → Direct Lake モデル → オントロジー → バインド → リフレッシュ ／ AI Search インデックス作成 → 文書投入</div><div class="dep-note">オントロジーのワークスペースID・アイテムIDが確定しないと「5. Toolbox 作成」に進めない。</div></div></div>
     <div class="dep-arrow">▼</div>
-    <div class="dep-row"><span class="dep-tag">5</span><div class="dep-body"><div class="dep-title">Foundry で Fabric IQ 接続を作成 → setup_toolbox.py → azd env set → azd deploy</div><div class="dep-note">接続には 3 のアプリ登録②が要る。Toolbox のエンドポイントが出てからでないとデプロイしても Fabric IQ 抜きで起動する。</div></div></div>
+    <div class="dep-row"><span class="dep-tag">5</span><div class="dep-body"><div class="dep-title">Foundry で Fabric IQ 接続を作成 → scripts/setup/setup_toolbox.py → azd env set → azd deploy</div><div class="dep-note">接続には 3 のアプリ登録②が要る。Toolbox のエンドポイントが出てからでないとデプロイしても Fabric IQ 抜きで起動する。</div></div></div>
     <div class="dep-arrow">▼</div>
     <div class="dep-row"><span class="dep-tag">7</span><div class="dep-body"><div class="dep-title">2人のユーザーでサインイン → 同意 → 質問を比べる</div><div class="dep-note">各ユーザーが一度 Fabric IQ の OAuth 同意を済ませておく必要がある。デモ本番の前に必ず。</div></div></div>
   </div>
@@ -288,9 +288,9 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
       <p>今回の調整で環境変数化済みだが、再発しやすいので場所を覚えておく。リポジトリ直下で <code>git grep -n "prjfoundry123"</code> を流して 0 件になることを確認する。</p>
       <ul>
         <li><span class="path">azure.yaml</span> の <code>uses:</code> と <code>services.&lt;project&gt;.endpoint</code> → <code>${AI_FOUNDRY_PROJECT_ENDPOINT}</code> に変更済み</li>
-        <li><span class="path">client_test_responses_session.py</span> の Responses URL → 環境変数から組み立てるよう変更済み</li>
-        <li><span class="path">demo_chat_iq.py</span> のエンドポイント既定値 → <code>IQ_AGENT_NAME</code> 経由に変更済み</li>
-        <li><span class="path">main.py</span> の <code>Agent(name=...)</code>（組織名入り）→ <code>AGENT_DISPLAY_NAME</code> に変更済み</li>
+        <li><span class="path">scripts/dev/client_test_responses_session.py</span> の Responses URL → 環境変数から組み立てるよう変更済み</li>
+        <li><span class="path">demo_ui/demo_chat_iq.py</span> のエンドポイント既定値 → <code>IQ_AGENT_NAME</code> 経由に変更済み</li>
+        <li><span class="path">agent/main.py</span> の <code>Agent(name=...)</code>（組織名入り）→ <code>AGENT_DISPLAY_NAME</code> に変更済み</li>
       </ul>
       <p class="fix">→ <span class="path">azure.yaml</span> の<b>エージェント名（YAMLのキー名）だけは環境変数にできない</b>。元テナントへ反映するときはここを手で変える。</p>
     </div>
@@ -304,7 +304,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
     <div class="silent-item">
       <h4><span class="n">D</span>フロントがオペレーターのトークンで Foundry を呼ぶと、Fabric IQ だけオペレーター権限で動く</h4>
       <p>Foundry の Fabric IQ ツール（Toolbox）は、呼び出し元ユーザーを Foundry 側で解決する（<code>FoundryToolbox</code> が <code>x-agent-foundry-call-id</code> を転送する実装）。一方 AI Search / Power BI は OBO 登録した本人の権限で動く。</p>
-      <p class="fix">→ フロントが <code>DefaultAzureCredential</code>（＝手元の <code>az login</code>）で Foundry を呼ぶと、<b>経路によって「誰か」がずれる</b>。2人で見比べても Fabric IQ の部分だけ2人とも同じ結果になり、デモの主張が成立しない。<span class="path">demo_chat_iq.py</span> は既定で <code>FOUNDRY_CALL_AS=user</code>（本人のトークン、scope <code>https://ai.azure.com/.default</code>）で呼ぶようになっている。<b>この既定を変えない。</b></p>
+      <p class="fix">→ フロントが <code>DefaultAzureCredential</code>（＝手元の <code>az login</code>）で Foundry を呼ぶと、<b>経路によって「誰か」がずれる</b>。2人で見比べても Fabric IQ の部分だけ2人とも同じ結果になり、デモの主張が成立しない。<span class="path">demo_ui/demo_chat_iq.py</span> は既定で <code>FOUNDRY_CALL_AS=user</code>（本人のトークン、scope <code>https://ai.azure.com/.default</code>）で呼ぶようになっている。<b>この既定を変えない。</b></p>
     </div>
 
     <div class="silent-item">
@@ -482,7 +482,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li><b>管理者の同意を与える</b>（自分が Global Administrator なのでその場でできる）。<b>自分自身の <code>access_as_user</code> にも同意が要る</b>（デモUIが自アプリの API のトークンを取るため）。</li>
         <li><span class="path">証明書とシークレット</span> でクライアントシークレットを作り、<b>値を安全な場所に保管する</b>（画面を離れると二度と見られない）。</li>
       </ol></dd>
-      <dt>確認方法</dt><dd>アクセス許可の一覧で、追加したすべての権限の状態が「&lt;テナント名&gt; に付与されました」の緑チェックになっている。<br>実地確認としては、5-5 の後に <code>streamlit run demo_chat_iq.py</code> でサインインが通ること。</dd>
+      <dt>確認方法</dt><dd>アクセス許可の一覧で、追加したすべての権限の状態が「&lt;テナント名&gt; に付与されました」の緑チェックになっている。<br>実地確認としては、5-5 の後に <code>streamlit run demo_ui/demo_chat_iq.py</code> でサインインが通ること。</dd>
       <dt>落とし穴</dt><dd><code>https://ai.azure.com</code> の委任権限が無い／同意が無いと、サインイン<b>直後</b>に <code>AADSTS65001</code>（同意が必要）や <code>AADSTS650057</code>（リソース未登録）で止まる。エラーが出るぶんまだ気づける方。<br>シークレットの有効期限を短くしすぎると、デモ当日に切れる。<br><b>デバイスコード方式のサインインは、セキュリティ既定値のテナントで <code>AADSTS530035</code> により拒否された</b>（パスワード＋MFA は通ったうえで）。デモ UI は既定でブラウザ方式（認可コード＋PKCE）を使うので、リダイレクト URI <code>http://localhost</code> が必須。</dd>
     </dl>
   </div>
@@ -546,7 +546,7 @@ ont_agent_search_iq</pre>
 
   <div class="callout info">
     <b>PySpark ノートブックは <span class="path">fabric_notebooks/01_create_delta_tables.py</span> にある</b>
-    <p>Fabric のノートブックに貼り付けて実行する。エージェント本体からは import されず、<span class="path">.agentignore</span> でディレクトリごとデプロイ対象から外してある。実行手順は <span class="path">fabric_notebooks/README.md</span> を参照。</p>
+    <p>Fabric のノートブックに貼り付けて実行する。エージェント本体からは import されず、<span class="path">agent/</span> の外にあるのでデプロイ対象にも入らない。実行手順は <span class="path">fabric_notebooks/README.md</span> を参照。</p>
     <p><b>最後のセルにバインド制約の自動チェックが入っている。</b>Fabric Ontology の制約は事前にエラーを返してくれないものが多く、「バインドしたのに値が全部 null」「テーブルが選択肢に出てこない」という形でしか現れないため、先に潰せるようにしてある。NG が出たら止まるので、<b>オントロジーのバインドに進む前に必ず OK を確認すること。</b></p>
   </div>
 
@@ -596,7 +596,7 @@ ont_agent_search_iq</pre>
       <dt>落とし穴</dt><dd>既存のインポートモードのモデルを「そのまま使えるだろう」と流用するのが最大の罠。定義は生成できてしまうのでオントロジーは作れるが、データが紐づかない（→ §1 C）。<br>
         <b>売上のファクトテーブルが複数ある場合、メジャー名を「売上金額」で統一しない。</b>テーブル間にリレーションが無いと、Agent がどちらを指したか判別できず、別テーブルの集計軸と組み合わせて空の結果を返す。名前自体に集計軸を含める（例: <code>商品群売上金額</code> / <code>拠点売上金額</code>）。<br>
         <b>API の形式が入出力で違う。</b>作成は TMSL（<code>model.bim</code>）しか受け付けず、TMDL で投げると <code>Workload_FailedToParseFile</code> になる。一方 <code>getDefinition</code> は TMDL を返す。読み出した内容をそのまま投げ直すことはできない。<br>
-        <span class="path">fabric_schema.py</span> の MEASURES / COLUMNS は<b>このモデルの構造と一致していなければならない</b>。環境変数では吸収できない。01 / 02 / <span class="path">fabric_schema.py</span> の3つで名前を揃える。</dd>
+        <span class="path">agent/fabric_schema.py</span> の MEASURES / COLUMNS は<b>このモデルの構造と一致していなければならない</b>。環境変数では吸収できない。01 / 02 / <span class="path">agent/fabric_schema.py</span> の3つで名前を揃える。</dd>
     </dl>
   </div>
 
@@ -708,11 +708,11 @@ Entity type names must be unique within a namespace.</pre>
         スキーマが英語の snake_case で説明も同義語も無いと、「製品A005の商品群名称」は
         <code>Failed to translate NL query to ontology query.</code> になる。
         「Which product_group does the product with product_id A005 belong to?」のように<b>英語でスキーマの名前を使う</b>と通る
-        （日本語でもスキーマの名前を混ぜれば通った）。エージェント側は <span class="path">main.py</span> の <code>AGENT_INSTRUCTIONS</code> で
+        （日本語でもスキーマの名前を混ぜれば通った）。エージェント側は <span class="path">agent/main.py</span> の <code>AGENT_INSTRUCTIONS</code> で
         「英語・スキーマの名前で問い合わせる」よう指示している。より根本的には、エンティティとリレーションの<b>説明欄に日本語の同義語</b>を書く【要確認：効果は未検証】。<br>
         なお一覧系の質問（「List all product entities」）は1分近くかかることがある。<br>
 
-        <b>⑩ Fabric IQ をエージェントから安定して使うための3つの決まり</b>（実機で確認。<span class="path">main.py</span> の <code>AGENT_INSTRUCTIONS</code> に反映済み）
+        <b>⑩ Fabric IQ をエージェントから安定して使うための3つの決まり</b>（実機で確認。<span class="path">agent/main.py</span> の <code>AGENT_INSTRUCTIONS</code> に反映済み）
         <ul style="margin:6px 0 0;padding-left:20px;">
           <li><b>並列に呼ばない。1回の質問にまとめる。</b>エージェントが <code>search_ontology</code> を2回同時に呼ぶと、片方が <code>Function failed</code> になった（2回とも）。
             「For the product with product_id A005, follow belongs_to_product_group to product_group and follow produced_at_site to site. Return …」のように1回にまとめると、製品・商品群・拠点が1行で返り、3回中3回成功した。</li>
@@ -737,7 +737,7 @@ Entity type names must be unique within a namespace.</pre>
       </ol>
       <b>権限はテーブル単位ではなくレイクハウス単位でしか切れない</b>（4-1 の注意枠）。テーブルに個別の権限を付ける画面は無い。</dd>
       <dt>確認方法</dt><dd>ワークスペースへのアクセスを与えていなくても、アイテム単位の読み取りだけで参照できる。詳細な確認手順は 4-6。</dd>
-      <dt>落とし穴</dt><dd>権限が足りない場合、Fabric IQ は「データがありません」に近い応答を返すことがある。<b>「権限が無い」と「データが無い」を取り違えない。</b><span class="path">main.py</span> の AGENT_INSTRUCTIONS はこの区別を明示するよう指示している。</dd>
+      <dt>落とし穴</dt><dd>権限が足りない場合、Fabric IQ は「データがありません」に近い応答を返すことがある。<b>「権限が無い」と「データが無い」を取り違えない。</b><span class="path">agent/main.py</span> の AGENT_INSTRUCTIONS はこの区別を明示するよう指示している。</dd>
     </dl>
   </div>
 
@@ -745,7 +745,7 @@ Entity type names must be unique within a namespace.</pre>
     <label class="step-head"><input type="checkbox"><span class="step-no">4-5</span><span class="step-title">AI Search のインデックスを作り、新しいグループIDで文書を再投入する</span><span class="badge b-ok">確認済</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>文書側の ACL を、新テナントのグループIDに合わせて作り直す。</dd>
-      <dt>どこで</dt><dd>手元の PC。<span class="path">ingest_sample_docs.py</span>（<span class="path">corpus_data.py</span> の架空製品10件から文書を作って投入する）</dd>
+      <dt>どこで</dt><dd>手元の PC。<span class="path">scripts/setup/ingest_sample_docs.py</span>（<span class="path">agent/corpus_data.py</span> の架空製品10件から文書を作って投入する）</dd>
       <dt>手順</dt><dd><ol>
         <li><code>QUALITY_TEAM_GROUP_ID</code> と <code>ALL_EMPLOYEES_GROUP_ID</code> に、3-1 の<b>グループの GUID</b> を設定する。</li>
         <li><code>AZURE_SEARCH_*</code> と <code>AZURE_OPENAI_*</code> を設定する。キーは画面に出さず <code>az</code> の出力をそのまま環境変数に入れる（下の例）。</li>
@@ -753,11 +753,11 @@ Entity type names must be unique within a namespace.</pre>
       </ol>
       <pre>export AZURE_SEARCH_API_KEY=$(az search admin-key show --service-name &lt;SEARCH&gt; -g &lt;RG&gt; --query primaryKey -o tsv)
 export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;ACCOUNT&gt; -g &lt;RG&gt; --query key1 -o tsv)
-./.venv/Scripts/python ingest_sample_docs.py --dry-run
-./.venv/Scripts/python ingest_sample_docs.py          # グループを作り直したら --recreate</pre>
+./.venv/Scripts/python scripts/setup/ingest_sample_docs.py --dry-run
+./.venv/Scripts/python scripts/setup/ingest_sample_docs.py          # グループを作り直したら --recreate</pre>
       新テナントでは20文書（10製品×品質報告書・仕様書）。A001〜A006 が全社公開、A007〜A010 が品質チーム限定。</dd>
-      <dt>確認方法</dt><dd><code>python search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で A008 の文書が返り、<code>&lt;全社員のGUID&gt;</code> では 0 件になる。これが通ればデモの片側が成立している。</dd>
-      <dt>落とし穴</dt><dd><b>ここが §1 A そのもの。</b>スラッグのまま投入すると、エラーは一切出ないのに全員が何も見られなくなる。<br>投入スクリプトとエージェント本体で<b>同じ環境変数の値</b>が読まれていることを確認する。<span class="path">.env</span> と <code>azd env</code> の両方に設定が要る（→ §6）。<br><span class="path">ingest_sample_docs.py</span> は<b>グループIDが GUID でなければ投入を拒否する</b>（このガードを外すのは <code>--allow-slugs</code> を付けたときだけ）。<br>元テナントでは <code>AZURE_SEARCH_INDEX_NAME</code> を<b>既存と別名</b>にしてから実行する。</dd>
+      <dt>確認方法</dt><dd><code>python agent/search_tool.py "製品A008の品質基準について教えて" &lt;品質チームのGUID&gt;</code> で A008 の文書が返り、<code>&lt;全社員のGUID&gt;</code> では 0 件になる。これが通ればデモの片側が成立している。</dd>
+      <dt>落とし穴</dt><dd><b>ここが §1 A そのもの。</b>スラッグのまま投入すると、エラーは一切出ないのに全員が何も見られなくなる。<br>投入スクリプトとエージェント本体で<b>同じ環境変数の値</b>が読まれていることを確認する。<span class="path">.env</span> と <code>azd env</code> の両方に設定が要る（→ §6）。<br><span class="path">scripts/setup/ingest_sample_docs.py</span> は<b>グループIDが GUID でなければ投入を拒否する</b>（このガードを外すのは <code>--allow-slugs</code> を付けたときだけ）。<br>元テナントでは <code>AZURE_SEARCH_INDEX_NAME</code> を<b>既存と別名</b>にしてから実行する。</dd>
     </dl>
   </div>
 
@@ -861,23 +861,23 @@ azd env list                               # ★選択中(*)の環境を確認</
   </div>
 
   <div class="step" id="s5-4">
-    <label class="step-head"><input type="checkbox"><span class="step-no">5-4</span><span class="step-title">setup_toolbox.py で Toolbox を作る</span></label>
+    <label class="step-head"><input type="checkbox"><span class="step-no">5-4</span><span class="step-title">scripts/setup/setup_toolbox.py で Toolbox を作る</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>エージェントが MCP 経由で Fabric IQ を呼べるエンドポイントを得る。</dd>
-      <dt>どこで</dt><dd>手元の PC（<code>az login</code> 済み）、<span class="path">setup_toolbox.py</span></dd>
+      <dt>どこで</dt><dd>手元の PC（<code>az login</code> 済み）、<span class="path">scripts/setup/setup_toolbox.py</span></dd>
       <dt>手順</dt><dd><pre>python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt   # 初回のみ
+.\.venv\Scripts\python -m pip install -r agent/requirements.txt   # 初回のみ
 $env:AI_FOUNDRY_PROJECT_ENDPOINT      = "https://&lt;account&gt;.services.ai.azure.com/api/projects/&lt;project&gt;"
 $env:FABRIC_IQ_PROJECT_CONNECTION_ID  = "/subscriptions/.../projects/&lt;project&gt;/connections/&lt;name&gt;"
 $env:FABRIC_IQ_ONTOLOGY_WORKSPACE_ID  = "&lt;4-3 のワークスペースID&gt;"
 $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテムID&gt;"
-.\.venv\Scripts\python setup_toolbox.py</pre>
+.\.venv\Scripts\python scripts/setup/setup_toolbox.py</pre>
       出力された MCP エンドポイントを控える（<code>.../toolboxes/&lt;name&gt;/versions/&lt;v&gt;/mcp?api-version=v1</code>）。</dd>
       <dt>確認方法</dt><dd>「作成しました。」に続いて Toolbox 名・バージョン・MCP エンドポイントが表示される。</dd>
       <dt>落とし穴</dt><dd><b>同じ名前で再実行すると新しいバージョンが作られ、エンドポイントのバージョン番号も変わる。</b>作り直したら <code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> を更新して再デプロイしないと、エージェントは古いバージョンを見続ける。<br>
         <b><code>FABRIC_IQ_PROJECT_CONNECTION_ID</code> は接続名ではなく ARM のフルパス</b>。5-3 のツール詳細画面の「プロジェクト接続 ID」をそのままコピーする。<br>
-        <b>SDK（azure-ai-projects）が要る</b>ので仮想環境に <span class="path">requirements.txt</span> を入れてから実行する。<br>
-        <span class="path">common.py</span> は import 時に AI Search や Azure OpenAI の環境変数も必須で読む。Toolbox 作成だけなら<b>それらはダミー値でも動く</b>（使われない）。<br>
+        <b>SDK（azure-ai-projects）が要る</b>ので仮想環境に <span class="path">agent/requirements.txt</span> を入れてから実行する。<br>
+        <span class="path">agent/common.py</span> は import 時に AI Search や Azure OpenAI の環境変数も必須で読む。Toolbox 作成だけなら<b>それらはダミー値でも動く</b>（使われない）。<br>
         プロジェクトのエンドポイントは Bicep 出力の <code>...cognitiveservices.azure.com/...</code> 形式ではなく、<b><code>...services.ai.azure.com/api/projects/&lt;project&gt;</code> 形式</b>で渡した（こちらで作成に成功）。</dd>
     </dl>
   </div>
@@ -895,9 +895,9 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <li><code>azd env list</code> で環境を再確認して <code>azd deploy --no-prompt</code>（新テナントで約3分）。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>出力の最後に Responses / Invocations のエンドポイントが出る。運用者の資格情報（scope <code>https://ai.azure.com/.default</code>）で Responses に「製品A001の品質基準について教えて」を POST し、<code>search_documents_tool</code> が呼ばれて回答が返る。<br>ポータルの <span class="path">ビルド &gt; エージェント</span> で状態が「実行中」になる。<br>ログは <code>azd ai agent sessions list &lt;agent&gt;</code> でセッションIDを取り、<code>azd ai agent monitor &lt;agent&gt; --session-id &lt;id&gt; --tail 300</code>。</dd>
-      <dt>落とし穴</dt><dd><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> が未設定だと、<b>エラーにならず Fabric IQ 抜きで起動する</b>（警告ログのみ）。デモ中に「オントロジーの質問だけ答えが薄い」という形で出る。<br><span class="path">requirements.txt</span> は検証済みバージョンに固定してある。<code>&gt;=</code> に緩めない。<br>
+      <dt>落とし穴</dt><dd><code>FABRIC_IQ_TOOLBOX_ENDPOINT</code> が未設定だと、<b>エラーにならず Fabric IQ 抜きで起動する</b>（警告ログのみ）。デモ中に「オントロジーの質問だけ答えが薄い」という形で出る。<br><span class="path">agent/requirements.txt</span> は検証済みバージョンに固定してある。<code>&gt;=</code> に緩めない。<br>
         <b>変数が足りないと1つずつしか教えてくれない。</b>新テナントでは1回目 <code>AZURE_AI_PROJECT_ID is not set</code>、2回目 <code>FOUNDRY_PROJECT_ENDPOINT is not set</code> で止まった（<span class="path">azure.yaml</span> の <code>endpoint: ${AI_FOUNDRY_PROJECT_ENDPOINT}</code> とは別に要求される）。<br>
-        <b>リポジトリ直下に置いた大きなファイルはリモートビルドにアップロードされる。</b><span class="path">.agentignore</span> で除外する（<code>*.msi</code> などを追加した）。<br>
+        <b><span class="path">azure.yaml</span> の <code>project</code> フォルダの中身はすべてリモートビルドにアップロードされる。</b>以前はリポジトリ直下が project で、手元に置いたインストーラ（<code>*.msi</code>）まで送られていた。今は project を <span class="path">agent/</span> に分けたので、本体以外は送られない。<span class="path">agent/</span> に一時ファイルを置くときは <span class="path">agent/.agentignore</span> で除外する。<br>
         <b>チャットモデルの容量が小さいと、Fabric IQ を足した途端にレート制限で失敗する。</b>ツール定義がプロンプトに乗るため。Bicep の既定だった容量 1（1,000 TPM）では足りず、50 に上げた（Standard は従量課金なので容量を上げても固定費は増えない）。</dd>
     </dl>
   </div>
@@ -950,7 +950,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
 
   <div class="callout">
     <b>「設定先」の意味</b>
-    <p><b>.env</b> は手元の PC で動かすもの（デモUI・投入スクリプト・<span class="path">setup_toolbox.py</span>）が読む。<b>azd env</b> はデプロイしたコンテナの中に渡る。<b>両方</b>と書いたものは<b>両側に同じ値を入れる</b>必要がある。片側だけだと、手元では動くのにデプロイ後だけ結果が変わる（特にグループIDはこれで §1 A を踏む）。</p>
+    <p><b>.env</b> は手元の PC で動かすもの（デモUI・投入スクリプト・<span class="path">scripts/setup/setup_toolbox.py</span>）が読む。<b>azd env</b> はデプロイしたコンテナの中に渡る。<b>両方</b>と書いたものは<b>両側に同じ値を入れる</b>必要がある。片側だけだと、手元では動くのにデプロイ後だけ結果が変わる（特にグループIDはこれで §1 A を踏む）。</p>
   </div>
 
   <!-- ================= 7 ================= -->
@@ -961,9 +961,9 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
     <label class="step-head"><input type="checkbox"><span class="step-no">7-1</span><span class="step-title">2つのブラウザで別々のユーザーとしてサインインする</span></label>
     <dl class="step-body">
       <dt>目的</dt><dd>同じ画面を2人分、独立したセッションで開く。</dd>
-      <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_chat_iq.py</code></dd>
+      <dt>どこで</dt><dd>手元の PC。<code>streamlit run demo_ui/demo_chat_iq.py</code></dd>
       <dt>手順</dt><dd><ol>
-        <li>デモ UI を起動する：<code>.\.venv\Scripts\streamlit run demo_chat_iq.py --server.address localhost</code>（<span class="path">.env</span> は <code>azd env get-values</code> から BOM なしで作る）。</li>
+        <li>デモ UI を起動する：<code>.\.venv\Scripts\streamlit run demo_ui/demo_chat_iq.py --server.address localhost</code>（<span class="path">.env</span> は <code>azd env get-values</code> から BOM なしで作る）。</li>
         <li><b>Edge / Chrome</b> で2つ開く（通常ウィンドウ＝ユーザーA、InPrivate か別プロファイル＝ユーザーB）。<b>VS Code 内蔵ブラウザは使わない</b>（サインインが <code>AADSTS900561</code> で失敗する）。</li>
         <li>それぞれで「Microsoftアカウントでサインイン」を押すと、既定のブラウザにアカウント選択画面が開く。<b>「別のアカウントを使用」</b>で該当ユーザーを選び、MFA まで完了させる。</li>
         <li>画面上部に「✅ 品質チーム所属」／「— 品質チーム未所属」のバッジが正しく出ることを確認する。</li>
@@ -984,7 +984,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <li>同じ質問をもう一度送り、今度は内容が返ることを確認する。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>2回目の質問で同意リンクが出ず、回答が返る。</dd>
-      <dt>落とし穴</dt><dd>未同意のユーザーが初めて Fabric IQ を使うと、<b>エラーではなく <code>oauth_consent_request</code>（同意リンク）が返る</b>。デモUIがこれを表示しない実装だと「何も返ってこない」ようにしか見えない。<span class="path">demo_chat_iq.py</span> は対応済み。<br>同意はユーザーごと。2人ともやる。</dd>
+      <dt>落とし穴</dt><dd>未同意のユーザーが初めて Fabric IQ を使うと、<b>エラーではなく <code>oauth_consent_request</code>（同意リンク）が返る</b>。デモUIがこれを表示しない実装だと「何も返ってこない」ようにしか見えない。<span class="path">demo_ui/demo_chat_iq.py</span> は対応済み。<br>同意はユーザーごと。2人ともやる。</dd>
     </dl>
   </div>
 
@@ -1018,12 +1018,12 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
       <dt>どこで</dt><dd>デモUIの「処理詳細を見る」、エージェントのログ</dd>
       <dt>手順</dt><dd><ol>
         <li><b>左右で答えが同じ（権限差が出ない）</b> → まず <code>FOUNDRY_CALL_AS</code> が <code>user</code> か確認する。<code>operator</code> だと Fabric IQ だけ全員同じ答えになる（画面に警告が出る）。</li>
-        <li><b>AI Search だけ両方 0 件</b> → グループIDがスラッグのまま投入された（§1 A）。<code>python search_tool.py "..." &lt;GUID&gt;</code> で直接確かめる。</li>
+        <li><b>AI Search だけ両方 0 件</b> → グループIDがスラッグのまま投入された（§1 A）。<code>python agent/search_tool.py "..." &lt;GUID&gt;</code> で直接確かめる。</li>
         <li><b>Fabric IQ だけ中身が薄い／空</b> → オントロジーのバインド（インポートモード／Decimal／リフレッシュ漏れ）を疑う。オントロジー画面のプレビューで実データが見えるか確認する。</li>
-        <li><b>Power BI（売上）だけ落ちる</b> → OBO で交換した Power BI トークンか、<span class="path">fabric_schema.py</span> のメジャー・列名がモデルと合っていない。</li>
+        <li><b>Power BI（売上）だけ落ちる</b> → OBO で交換した Power BI トークンか、<span class="path">agent/fabric_schema.py</span> のメジャー・列名がモデルと合っていない。</li>
         <li><b>403</b> → 3-5 の RBAC。<b>401/424</b> → セッション切れ。サインアウトして入り直す。</li>
         <li><b>Fabric IQ のツール結果が <code>Error: Function failed.</code></b> → ログには詳細が出ないので、Toolbox の MCP エンドポイントへ直接 <code>tools/call</code> して生のエラーを見る（手順は <span class="path">docs/operations_log.md</span> §16）。<code>Failed to translate NL query…</code> なら 2-3 の AI 設定か、質問の書き方（4-3 落とし穴 ⑨）。</li>
-        <li>「処理詳細を見る」でどのツールが呼ばれたかを見る。<span class="path">demo_chat_iq.py</span> は <code>search_documents_tool</code> / <code>query_fabric_tool</code> 以外をすべて Fabric IQ とみなす。</li>
+        <li>「処理詳細を見る」でどのツールが呼ばれたかを見る。<span class="path">demo_ui/demo_chat_iq.py</span> は <code>search_documents_tool</code> / <code>query_fabric_tool</code> 以外をすべて Fabric IQ とみなす。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>切り分けた結果が、上のどれか1つに収束する。</dd>
       <dt>落とし穴</dt><dd><b>「データが無い」と「権限が無い」を混同しない。</b>このデモで一番よく起きる誤診。ツールの結果が 0 件でも、それは権限の話かもしれない。</dd>
@@ -1068,9 +1068,9 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>9</td><td><code>function_call_output</code> が Responses の <code>output</code> に含まれるか<br><b>→ 含まれる</b>（デプロイ後に実機で確認）。デモUIの「閲覧できなかった情報」表示は機能する</td><td>含まれない場合、「閲覧できなかった情報」の表示は出ない。回答文での明示だけで足りるかを判断する</td><td><a href="#s7-3">7-3</a></td></tr>
         <tr><td>10</td><td>Fabric IQ 経由の応答時間（同期実行でタイムアウトに縛られる）</td><td>横断質問を10回程度送って所要時間を測る。デモUIのタイムアウトは 180 秒</td><td><a href="#s7-3">7-3</a></td></tr>
         <tr><td>11</td><td><code>_PerToolCallLimitMiddleware</code> が Toolbox 経由の MCP ツール呼び出しにも効くか</td><td>同じ Fabric IQ ツールを3回以上呼ばせる質問を投げ、3回目が <code>tool_call_limit_exceeded</code> になるか見る</td><td><a href="#s5-5">5-5</a></td></tr>
-        <tr><td>12</td><td>Invocations 経由の <code>session_id</code> / <code>user_id</code> が Responses 側と一致するか</td><td><code>client_register_obo.py</code> の出力と、Responses 側のログを突き合わせる</td><td><a href="#s7-1">7-1</a></td></tr>
+        <tr><td>12</td><td>Invocations 経由の <code>session_id</code> / <code>user_id</code> が Responses 側と一致するか</td><td><code>scripts/dev/client_register_obo.py</code> の出力と、Responses 側のログを突き合わせる</td><td><a href="#s7-1">7-1</a></td></tr>
         <tr><td>13</td><td>オントロジーへのアイテム単位の読み取り権限を付与する具体的な UI 経路</td><td>オントロジーの「アクセス許可の管理」に読み取りだけを付与するオプションがあるか確認する</td><td><a href="#s4-4">4-4</a></td></tr>
-        <tr><td>14</td><td>Foundry の接続タイプ一覧に <b>Fabric IQ</b> が無く、<b>Microsoft Fabric（プレビュー）</b>しか無い。これが Fabric IQ の経路として使えるか<br><b>→ 使えない（SDK で確認）。</b>「Microsoft Fabric」は<b>データエージェント用</b>（ツール種別 <code>fabric_dataagent_preview</code>）。Fabric IQ は MCP の URL と OAuth を持つ <code>RemoteTool_Preview</code> 種別の接続が必要で、ツールカタログ側から作る【要確認：UI 上の経路】</td><td>接続フォームのキーが <code>workspace-id</code> / <code>artifact-id</code> で、データエージェント向けに見える。オントロジー作成後にこの接続を作り、<code>setup_toolbox.py</code> が通るかで判定する</td><td><a href="#s5-3">5-3</a></td></tr>
+        <tr><td>14</td><td>Foundry の接続タイプ一覧に <b>Fabric IQ</b> が無く、<b>Microsoft Fabric（プレビュー）</b>しか無い。これが Fabric IQ の経路として使えるか<br><b>→ 使えない（SDK で確認）。</b>「Microsoft Fabric」は<b>データエージェント用</b>（ツール種別 <code>fabric_dataagent_preview</code>）。Fabric IQ は MCP の URL と OAuth を持つ <code>RemoteTool_Preview</code> 種別の接続が必要で、ツールカタログ側から作る【要確認：UI 上の経路】</td><td>接続フォームのキーが <code>workspace-id</code> / <code>artifact-id</code> で、データエージェント向けに見える。オントロジー作成後にこの接続を作り、<code>scripts/setup/setup_toolbox.py</code> が通るかで判定する</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>15</td><td>テナント設定 <code>PowerBIMCP</code>（Power BI MCP サーバーエンドポイント）が無効でも Fabric IQ の Toolbox が動くか</td><td><b>Toolbox の作成は無効のままで成功した（2026-09-21）。</b>実行時に Fabric IQ の呼び出しが失敗したら、この設定を有効化して再試行する</td><td><a href="#s5-4">5-4</a></td></tr>
         <tr><td>16</td><td>Ontology の依存設定（Graph / データエージェント アイテム）が有効か</td><td>管理ポータルのテナント設定で直接確認する。<b>admin/tenantsettings API には返ってこない</b>ため、API では判定できない</td><td><a href="#s2-3">2-3</a></td></tr>
         <tr><td>17</td><td>オントロジーへのデータ取り込みは実コピーか参照か</td><td>付随 Lakehouse（<code>&lt;name&gt;_lh_&lt;id&gt;</code>）の OneLake 上のサイズを、バインド＋リフレッシュの前後で比べる。実コピーなら容量とリフレッシュ時間が上流データ量に比例する</td><td><a href="#s4-3">4-3</a></td></tr>
@@ -1084,7 +1084,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
   </div>
 
   <footer>
-    <p>関連: <a href="apply_to_original_tenant.html">元テナントへの反映手順書</a> ／ <a href="tenant_config_record.md">テナント設定の記録テンプレート</a> ／ <a href="azure-resources-report.html">Azureリソース構成</a></p>
+    <p>関連: <a href="apply_to_original_tenant.html">元テナントへの反映手順書</a> ／ <a href="../records/tenant_config_record.md">テナント設定の記録テンプレート</a> ／ <a href="../reports/azure-resources-report.html">Azureリソース構成</a></p>
     <p>この手順書に<b>実在の値（テナントID・クライアントID・シークレット・キー・グループID）は書かれていない</b>。実際の値は記録テンプレート側に、シークレットは Key Vault 等に保管し、保管場所だけを記録する。</p>
   </footer>
 

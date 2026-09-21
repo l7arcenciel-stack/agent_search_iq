@@ -1,7 +1,7 @@
 # テナント設定の記録
 
 新テナントで作業しながら埋め、元テナントへ反映するときにそのまま参照するための記録。
-手順は [new_tenant_setup.html](new_tenant_setup.html) / [apply_to_original_tenant.html](apply_to_original_tenant.html) を参照。
+手順は [new_tenant_setup.html](../guides/new_tenant_setup.html) / [apply_to_original_tenant.html](../guides/apply_to_original_tenant.html) を参照。
 
 ---
 
@@ -180,7 +180,7 @@ Fabric IQ ツールの認証は「OAuth ID パススルー」（`UserEntraToken`
 
 ## 7. 未確認事項の結果
 
-[new_tenant_setup.html](new_tenant_setup.html#s8) の §8 について、実機で確認した結果を記録する（2026-09-21 時点）。
+[new_tenant_setup.html](../guides/new_tenant_setup.html#s8) の §8 について、実機で確認した結果を記録する（2026-09-21 時点）。
 
 | # | 内容 | 結果 | 確認日 |
 |---|---|---|---|

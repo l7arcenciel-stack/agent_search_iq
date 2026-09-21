@@ -74,7 +74,7 @@ def parse_group_names(raw: str) -> list[str]:
 
 # --- ACLグループ（corpus_data.pyから参照） ---
 # コードへの直書きを避け、すべて環境変数化する（テナントを差し替えたときに
-# 値の変更だけで済むようにするため。docs/new_tenant_setup.html 参照）。
+# 値の変更だけで済むようにするため。docs/guides/new_tenant_setup.html 参照）。
 # 未設定時はデモ用の文字列スラッグにフォールバックするが、**実運用では必ず
 # Entra ID の実グループの Object ID(GUID) を設定すること**。
 #

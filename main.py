@@ -376,12 +376,30 @@ def query_fabric_tool(
 # Agent定義・サーバー起動
 # ============================================================================
 
+# Fabric IQ の節に列挙したエンティティ名・リレーション名は、
+# fabric_notebooks/03_create_ontology_definition.py の ENTITIES / RELATIONSHIPS と一致させること。
+# オントロジーのスキーマは英語の snake_case で説明も同義語も無いため、日本語の業務用語のまま
+# 問い合わせると "Failed to translate NL query to ontology query." になる（実機で確認）。
 AGENT_INSTRUCTIONS = (
     "あなたは社内アシスタントです。次のToolを使い分けてください。\n"
     "- search_documents_tool: 製品の品質報告書・取扱説明書・仕様書などの『文書』を検索する\n"
     "- query_fabric_tool: 売上・粗利等の『数値実績』をFabricセマンティックモデルから集計する\n"
     "- Fabric IQ のツール（オントロジー）: 製品・拠点・得意先・設備などの『業務概念どうしの関係』を"
     "たどる質問、複数の業務領域にまたがる質問に使う\n"
+    "\n"
+    "【Fabric IQ（オントロジー）への問い合わせ方】\n"
+    "オントロジーの検索ツール（search_ontology）に渡す質問文 naturalLanguageQuery は、ユーザーの日本語を"
+    "そのまま渡さず、英語で、次のスキーマの名前を使って書き直してください。"
+    "日本語の業務用語（例: 商品群名称）はスキーマに対応付けられず、変換に失敗します。\n"
+    "エンティティ: product（製品: product_id, name, status, product_group_code, unit_price）、"
+    "product_group（商品群: product_group_code, name）、site（拠点: site_code, name, region_name）、"
+    "quality_document_public / quality_document_restricted（品質文書: document_id, product_id, name, summary）\n"
+    "リレーション: belongs_to_product_group（product→product_group）、produced_at_site（product→site）、"
+    "public_document_describes_product / restricted_document_describes_product（品質文書→product）\n"
+    "例: 『製品A005の商品群は？』→ \"Which product_group does the product with product_id A005 belong to? "
+    "Return the product_group name.\"\n"
+    "結果の値（name など）は日本語のまま返るので、回答は日本語で書いてください。\n"
+    "\n"
     "質問の内容に応じて必要なToolだけを呼び出してください（複数必要な場合は複数呼んでかまいません）。"
     "期間・集計軸などの指定が曖昧、または省略されている場合でも、聞き返さずにまずTool呼び出しを"
     "実行してください（例: 期間指定が無ければ全期間集計）。その場合は、回答の中で自分が採用した"

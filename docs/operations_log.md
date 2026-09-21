@@ -408,7 +408,25 @@ Accept: application/json, text/event-stream
   （[data-agent-tenant-settings](https://learn.microsoft.com/en-us/fabric/data-science/data-agent-tenant-settings)）。
   「格納」はエージェントが会話履歴を最長28日保存するため。反映には**最大1時間**。
   → 当初「格納は無効のままで試す」と判断したのは誤りだった。
-- **2026-09-21 に「格納」も有効化。反映待ち（試用容量に戻して待機）。**
+- **2026-09-21 に「格納」も有効化。**直後は試用容量・F2 とも同じエラーだったが、**20〜30分後に F2 で通るようになった**。
+  反映後は、失敗する質問でも所要時間が約2秒 → 約10秒に伸びた（AI まで届いたうえで失敗している）。
+
+### 16-1. 解決：質問の書き方
+
+反映後も「製品A005の商品群名称」は失敗した。質問の書き方を変えて比べた（F2 上、MCP へ直接 `tools/call`）。
+
+| naturalLanguageQuery | 結果 |
+|---|---|
+| 製品A005の商品群名称 | 失敗（約10秒） |
+| Which product_group does the product with product_id A005 belong to? | **成功**：A005 熱交換器β → PG02 金属部品 |
+| product_id が A005 の product が belongs_to_product_group でつながる product_group の name | **成功**（日本語でもスキーマ名を混ぜれば通る） |
+| List all product_group entities | **成功**：4件 |
+| List all product entities | **成功**（約44秒） |
+
+- スキーマが英語の snake_case で、説明や同義語が無いため、日本語の業務用語を対応付けられない。
+- エージェントが最初に Fabric IQ へ渡していた質問も「製品ID A005の商品群名称を教えてください」で、まさに失敗パターンだった。
+- 対処: `main.py` の `AGENT_INSTRUCTIONS` に「search_ontology には英語でスキーマの名前を使って問い合わせる」
+  指示とスキーマの一覧・例文を追加して再デプロイ。
 - 「Microsoft サブプロセッサーとしての OpenAI」の2設定は必須一覧に無いため、有効化していない。
 - 元テナントでは**国外処理と国外保存**の両方が要るため、データ所在地の社内承認が必要になる見込み（元テナント手順書の依頼 #8）。
 
@@ -416,6 +434,7 @@ Accept: application/json, text/event-stream
 
 ## 未完了（2026-09-21 時点）
 
-- 「処理」「格納」の設定反映後（最大1時間）、F2 で自然文検索が通るかの確認（§16）
+- 指示変更後のエージェント経由での確認（Fabric IQ を使う質問）
+- 試用容量で AI 機能（自然文検索）が動くかの確認
 - 2人での比較（デモ UI）
 - 不要だったアプリ登録②の削除

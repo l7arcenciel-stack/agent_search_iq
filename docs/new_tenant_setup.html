@@ -383,8 +383,8 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
           <li>Azure OpenAI に送信されたデータは…外部に<b>格納</b>できます（同上。<b>エージェントが会話履歴を最長28日保存する</b>ため）</li>
         </ul>
         Fabric の AI を動かす Azure OpenAI は<b>米国と EU にしか置かれていない</b>。これらが欠けていると、エンティティ一覧は取れるのに自然文検索だけ
-        <code>Failed to translate NL query to ontology query.</code> で即座に失敗する（新テナントで踏んだ）。
-        <b>反映には最大1時間</b>かかる。「Microsoft サブプロセッサーとしての OpenAI」の2設定は必須ではない。<br>
+        <code>Failed to translate NL query to ontology query.</code> で即座に（約2秒で）失敗する（新テナントで踏んだ）。
+        <b>新テナントでは「格納」を最後に有効にし、反映まで20〜30分かかった。</b>反映後は同じエラーでも約10秒かかるようになり、AI まで届いたうえで失敗していると区別できる。「Microsoft サブプロセッサーとしての OpenAI」の2設定は必須ではない。<br>
         <b>オンにすると質問文などが国外で処理され、会話履歴が国外に保存される</b>ので、元テナントでは<b>データ所在地の社内承認</b>が要る可能性が高い。</dd>
     </dl>
   </div>
@@ -692,7 +692,15 @@ Entity type names must be unique within a namespace.</pre>
         <code>/ontologies/&lt;id&gt;/getDefinition</code> だけが 404 になる。
         コスト節約で容量を止めた翌日に踏みやすい。当初トークンの問題と誤診したが、原因は容量停止だった。
         <b>404 を「0件」「データ消失」「権限なし」と解釈する前に、容量の状態を確認すること。</b>
-        <span class="path">00_check_status.py</span> は最初に容量状態を確認する。
+        <span class="path">00_check_status.py</span> は最初に容量状態を確認する。<br>
+
+        <b>⑨ Fabric IQ の自然文検索は、日本語の業務用語のままだと変換に失敗する。</b>
+        スキーマが英語の snake_case で説明も同義語も無いと、「製品A005の商品群名称」は
+        <code>Failed to translate NL query to ontology query.</code> になる。
+        「Which product_group does the product with product_id A005 belong to?」のように<b>英語でスキーマの名前を使う</b>と通る
+        （日本語でもスキーマの名前を混ぜれば通った）。エージェント側は <span class="path">main.py</span> の <code>AGENT_INSTRUCTIONS</code> で
+        「英語・スキーマの名前で問い合わせる」よう指示している。より根本的には、エンティティとリレーションの<b>説明欄に日本語の同義語</b>を書く【要確認：効果は未検証】。<br>
+        なお一覧系の質問（「List all product entities」）は1分近くかかることがある。
       </dd>
     </dl>
   </div>
@@ -972,6 +980,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <li><b>Fabric IQ だけ中身が薄い／空</b> → オントロジーのバインド（インポートモード／Decimal／リフレッシュ漏れ）を疑う。オントロジー画面のプレビューで実データが見えるか確認する。</li>
         <li><b>Power BI（売上）だけ落ちる</b> → OBO で交換した Power BI トークンか、<span class="path">fabric_schema.py</span> のメジャー・列名がモデルと合っていない。</li>
         <li><b>403</b> → 3-5 の RBAC。<b>401/424</b> → セッション切れ。サインアウトして入り直す。</li>
+        <li><b>Fabric IQ のツール結果が <code>Error: Function failed.</code></b> → ログには詳細が出ないので、Toolbox の MCP エンドポイントへ直接 <code>tools/call</code> して生のエラーを見る（手順は <span class="path">docs/operations_log.md</span> §16）。<code>Failed to translate NL query…</code> なら 2-3 の AI 設定か、質問の書き方（4-3 落とし穴 ⑨）。</li>
         <li>「処理詳細を見る」でどのツールが呼ばれたかを見る。<span class="path">demo_chat_iq.py</span> は <code>search_documents_tool</code> / <code>query_fabric_tool</code> 以外をすべて Fabric IQ とみなす。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>切り分けた結果が、上のどれか1つに収束する。</dd>
@@ -1027,7 +1036,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td>19</td><td>同じエッジテーブルを2つのリレーションで共用できるか</td><td><code>edge_document_product</code> を公開用・限定用の2リレーションで共用している。リフレッシュ後、それぞれの文書エンティティから正しい製品だけを辿れるかを確認する</td><td><a href="#s4-3">4-3</a></td></tr>
         <tr><td>20</td><td>作成直後の Fabric IQ 接続が <code>isSharedToAll: false</code>。作成者以外のユーザーが使えるか</td><td>7-3 でテストユーザーが Fabric IQ を使う質問をして、接続エラーにならないかを見る。失敗したら接続の共有設定を確認する</td><td><a href="#s5-3">5-3</a></td></tr>
         <tr><td>21</td><td>最小権限の <b>Foundry Agent Consumer</b> で Invocations（OBO 登録）まで通るか</td><td>デモUIでサインイン直後の OBO 登録が 403 にならないかを見る。403 なら Foundry User に上げる</td><td><a href="#s3-5">3-5</a></td></tr>
-        <tr><td>22</td><td><b>Fabric IQ の自然文検索が失敗する</b>（<code>Failed to translate NL query to ontology query.</code>）<br><b>→ 原因の見込み：日本リージョンで必須の AI 設定のうち「外部に格納」が無効だった</b>（要件はドキュメントで確認済み。2-3 参照）</td><td>2026-09-21 に「処理」「格納」とも有効化し、反映待ち（最大1時間）。反映後に Toolbox の MCP へ直接 <code>tools/call</code> して通るか確かめる。切り分けの経過：容量の種類（試用 / F2）、GraphModel のスキーマ・リフレッシュ、質問の言語はいずれも原因ではなかった</td><td><a href="#s2-3">2-3</a></td></tr>
+        <tr><td>22</td><td><s>Fabric IQ の自然文検索が失敗する</s><br><b>→ 解決（2026-09-21）。原因は2つ：</b>(1) 日本リージョンで必須の「Azure OpenAI に送信されたデータは…外部に<b>格納</b>できます」が無効だった（有効化後、反映に20〜30分）。(2) 日本語の業務用語のままだと NL→GQL の変換に失敗する。<b>英語で、スキーマの名前（<code>product_group</code> など）を使えば通る</b>。エージェントの指示に問い合わせ方を追記して対処</td><td>F2 で確認。<b>試用容量で AI 機能が動くかは未確認</b>。「Which product_group does the product with product_id A005 belong to?」で A005→PG02（金属部品）がグラフから返った</td><td><a href="#s4-3">4-3</a></td></tr>
       </tbody>
     </table>
   </div>

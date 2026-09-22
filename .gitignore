@@ -40,3 +40,9 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# お客様向けの資料（公開リポジトリに入れない）
+ontology_permission_and_demo_design*.html
+docs/ontology_permission_and_demo_design.md
+ppt_update_ontology_section.md
+*.pptx

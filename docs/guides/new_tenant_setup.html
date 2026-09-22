@@ -736,7 +736,7 @@ Entity type names must be unique within a namespace.</pre>
         <li><b>オントロジー</b>への読み取りを <b>全社員グループ</b>に付与する（品質チームのメンバーも全社員グループに入っているので、これで2人とも届く）。</li>
         <li><b><code>lh_public</code></b> への読み取りを <b>全社員グループ</b>に付与する。</li>
         <li><b><code>lh_restricted</code></b> は <code>ws-agent-search-iq-restricted</code> に置き、<b>品質チームグループを閲覧者</b>にする（<span class="path">tenant_setup/30_fabric_items.py</span> が行う）。<b>さらに <code>lh_restricted</code> を品質チームグループに ReadAll 付きで共有する（必須）。</b>閲覧者だけでは、ポータルでは見えるのに Fabric IQ（MCP）では拒否され、エージェントが <code>Function failed</code> になる（2026-09-22 に確認）。<br>
-        グループに共有して20分ほどたっても効かなかったため、検証では<b>所属ユーザー個人にも共有</b>して通した。グループだけで効くか（反映待ちだったのか）は未確認。</li>
+        <b>グループへの共有だけで足りる</b>が、<b>反映に最大2時間かかる</b>（付けて20分では効かなかった）。デモの前日までに付けておく。</li>
         <li>レイクハウスの共有では<b>「すべての SQL エンドポイント データを読み取る」と「すべての Apache Spark を読み取り…」にチェック</b>を入れる。「受信者にメールで通知する」は外す。</li>
       </ol>
       <b>権限はテーブル単位ではなくレイクハウス単位でしか切れない</b>（4-1 の注意枠）。テーブルに個別の権限を付ける画面は無い。</dd>

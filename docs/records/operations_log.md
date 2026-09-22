@@ -652,14 +652,25 @@ azd env get-values > .env        # ※ BOM なしで書き直した（下記）
 | デモ UI 1〜3問 | §18-4 と同じ | §18-4 と同じ |
 | デモ UI 4問目（Fabric IQ で限定文書） | QD-A008 が返る | `Function failed`（拒否）→「閲覧できない」と明示 |
 
-権限：`ws-agent-search-iq` = 2人とも閲覧者＋モデルのビルド／`ws-agent-search-iq-restricted` = `grp-quality-team` が閲覧者＋`lh_restricted` を `grp-quality-team` と太郎個人に ReadAll 付きで共有
+権限：`ws-agent-search-iq` = 2人とも閲覧者＋モデルのビルド／`ws-agent-search-iq-restricted` = `grp-quality-team` が閲覧者＋`lh_restricted` を `grp-quality-team` と太郎個人に ReadAll 付きで共有（太郎個人の共有は §20-5 で削除）
 
 確認後、**両ワークスペースを試用容量に戻し、F2 を停止**（Inactive を API で確認）。Fabric IQ の自然文検索を使う確認・デモは F2 に戻してから行う
+
+### 20-5. グループ共有だけで ReadAll が効くか → 効く（確定）
+
+- 自然文検索は使わず、太郎の資格情報で GraphModel に GQL（`MATCH (d:quality_document_restricted) …`）を投げて判定する。
+  **GQL は試用容量でも動き、権限不足は同じ `security configuration enforcement` で出る**ので、CU をほぼ使わずに権限だけを確かめられる
+- 個人共有ありの状態で太郎の GQL → 2件（QD-A007 / QD-A008）
+- `lh_restricted` から太郎個人の共有を削除（10:30 JST ごろ）。ポータルの通知：**「この変更を有効にするには最大で 2 時間がかかることがあります」**
+  → 前回グループ共有が約20分で効かなかったのは、この反映待ちだった可能性が高い
+- 削除直後（10:30）は2件取れる。5分おきに試した（10:30〜10:50、12:06〜12:11。間は PC のスリープで途切れた）→ すべて2件
+- **12:36（削除から約2時間6分、反映の上限を過ぎた時点）でも2件取れた → グループへの共有だけで効く、と確定**。
+  前回グループ共有が約20分で効かなかったのは反映待ちだった
+- 現在の権限：`lh_restricted` の共有は `grp-quality-team`（ReadAll）だけ。太郎個人の共有は削除済み
 
 ---
 
 ## 未完了（2026-09-22 時点）
 
 - 不要だったアプリ登録②の削除
-- §20-3：`lh_restricted` の ReadAll がグループ共有だけで効くかの切り分け（今は太郎個人にも共有したまま）
-- 資料 `ontology_permission_and_demo_design.html` の第9・10章の修正（閲覧者で漏れた件と別ワークスペース化）
+- PPT へのオントロジーの章の追加（`ppt_update_ontology_section.md` の指示で別 PC で作業）

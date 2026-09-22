@@ -214,7 +214,7 @@ def main() -> None:
     print("    「すべての Apache Spark を読み取り…」にチェックする（既定の共有だけでは 401）")
     print(f"  lh_restricted     → 品質チームグループ（{RESTRICTED_WS_NAME} の閲覧者に加えて必須）")
     print("    同じく「すべての Apache Spark を読み取り…」にチェック。閲覧者だけだと Fabric IQ で拒否される")
-    print("    グループで効かなければ、所属ユーザー個人にも共有する（検証ではそれで通った）")
+    print("    グループへの共有で足りるが、反映に最大2時間かかる")
 
 
 if __name__ == "__main__":

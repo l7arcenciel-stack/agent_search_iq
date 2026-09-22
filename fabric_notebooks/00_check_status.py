@@ -33,6 +33,10 @@ import urllib.parse
 import urllib.request
 
 WORKSPACE_NAME = "ws-agent-search-iq"
+# 限定データ専用のワークスペース。閲覧者は grp-quality-team だけにする。
+# 元のワークスペースに置くと、ワークスペースの閲覧者（デモユーザー全員）が
+# SQL エンドポイント経由で限定データを読めてしまう（operations_log §20）。
+RESTRICTED_WORKSPACE_NAME = "ws-agent-search-iq-restricted"
 ONTOLOGY_NAME = "ont_agent_search_iq"
 SEMANTIC_MODEL_NAME = "sm_agent_search_iq"
 LAKEHOUSES = ("lh_public", "lh_restricted")
@@ -148,17 +152,42 @@ def main() -> None:
     items = _get(f"https://api.fabric.microsoft.com/v1/workspaces/{wsid}/items", tok)
     by_name = {i["displayName"]: i for i in items.get("value", [])}
 
+    # --- 限定用ワークスペース -------------------------------------------------
+    print(f"\n■ 限定用ワークスペース")
+    rws = next((w for w in ws.get("value", [])
+                if w.get("displayName") == RESTRICTED_WORKSPACE_NAME), None)
+    r_by_name: dict = {}
+    if not rws:
+        print(f"   {mark(False)}{RESTRICTED_WORKSPACE_NAME} が見つかりません")
+        todo.append(f"ワークスペース {RESTRICTED_WORKSPACE_NAME} を作成し、"
+                    "grp-quality-team だけを閲覧者にする")
+    else:
+        rwsid = rws["id"]
+        print(f"   {mark(True)}{RESTRICTED_WORKSPACE_NAME}")
+        print(f"   workspaceId = {rwsid}")
+        env_lines.append(f"FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID = {rwsid}")
+        ra = _get(f"https://api.fabric.microsoft.com/v1/workspaces/{rwsid}/roleAssignments", tok)
+        for r in ra.get("value", []):
+            pr = r["principal"]
+            print(f"          {r['role']:12s} {pr.get('displayName')} ({pr['type']})")
+        r_items = _get(f"https://api.fabric.microsoft.com/v1/workspaces/{rwsid}/items", tok)
+        r_by_name = {i["displayName"]: i for i in r_items.get("value", [])}
+    if "lh_restricted" in by_name:
+        print(f"   [!!]  {WORKSPACE_NAME} にも lh_restricted がある。閲覧者に SQL 経由で漏れる")
+        todo.append(f"{WORKSPACE_NAME} の lh_restricted を削除する（限定用ワークスペースに移したもの）")
+
     # --- レイクハウスとテーブル ---------------------------------------------
     print(f"\n■ レイクハウス")
     lh_ids: dict[str, str] = {}
     for lh in LAKEHOUSES:
-        it = by_name.get(lh)
+        lh_wsid = rws["id"] if lh == "lh_restricted" and rws else wsid
+        it = (r_by_name if lh == "lh_restricted" else by_name).get(lh)
         if not it:
             print(f"   {mark(False)}{lh} が無い")
             todo.append(f"レイクハウス {lh} を作成する")
             continue
         lh_ids[lh] = it["id"]
-        t = _get(f"https://api.fabric.microsoft.com/v1/workspaces/{wsid}"
+        t = _get(f"https://api.fabric.microsoft.com/v1/workspaces/{lh_wsid}"
                  f"/lakehouses/{it['id']}/tables", tok)
         if "_error" in t:
             # API エラーを「0件」と読むと誤った TODO を出してしまうので区別する。
@@ -311,11 +340,13 @@ def _print_todo(todo: list, env_lines: list) -> None:
         print("  残りの工程は docs/guides/new_tenant_setup.html の §5 以降（Foundry 接続 →")
         print("  Toolbox → azd deploy → 2人で比較）を参照。")
 
-    print("\n  ※ 権限付与はポータル作業（API 非対応）:")
-    print("       lh_public     → grp-all-employees")
-    print("       lh_restricted → grp-quality-team のみ")
-    print("     いずれも「すべての SQL エンドポイント データを読み取る」と")
-    print("     「すべての Apache Spark を読み取り…」にチェックが必要。")
+    print("\n  ※ 権限:")
+    print("       lh_public     → grp-all-employees（アイテム共有。ポータル作業）")
+    print("                       「すべての SQL エンドポイント データを読み取る」と")
+    print("                       「すべての Apache Spark を読み取り…」にチェックが必要")
+    print(f"       lh_restricted → {RESTRICTED_WORKSPACE_NAME} に置き、")
+    print("                       grp-quality-team だけをワークスペースの閲覧者にし、")
+    print("                       lh_restricted も grp-quality-team に ReadAll 付きで共有する（Fabric IQ に必須）")
 
     if env_lines:
         print("\n" + "=" * 72)

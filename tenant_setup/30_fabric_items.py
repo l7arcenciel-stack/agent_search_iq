@@ -1,5 +1,5 @@
 """
-Fabric のワークスペースを作って容量に割り当て、レイクハウス2つとオントロジーのアイテムを作る。
+Fabric のワークスペース2つを作って容量に割り当て、レイクハウス2つとオントロジーのアイテムを作る。
 
     $env:FABRIC_CAPACITY_NAME = "<容量の表示名>"      # 例: F2 の容量名、または試用容量名
     python tenant_setup/30_fabric_items.py --dry-run
@@ -11,9 +11,15 @@ Fabric のワークスペースを作って容量に割り当て、レイクハ�
   3. fabric_notebooks/03_create_ontology_definition.py
 
 【作るもの】（名前は環境変数で変更可）
-  FABRIC_WORKSPACE_NAME  ws-agent-search-iq
-  lh_public / lh_restricted   ← 閲覧範囲ごとに分ける。権限はレイクハウス単位でしか切れないため
-  FABRIC_ONTOLOGY_NAME   ont_agent_search_iq  ← 付随の Lakehouse / GraphModel が自動で作られる
+  FABRIC_WORKSPACE_NAME             ws-agent-search-iq
+    lh_public                       ← 全社公開。全社員グループにアイテム共有
+    FABRIC_ONTOLOGY_NAME            ont_agent_search_iq  ← 付随の Lakehouse / GraphModel が自動で作られる
+  FABRIC_RESTRICTED_WORKSPACE_NAME  ws-agent-search-iq-restricted
+    lh_restricted                   ← 品質チーム限定。grp-quality-team をワークスペースの閲覧者にする
+
+  限定データを別ワークスペースに置く理由：デモユーザーは Fabric IQ を使うために
+  ws-agent-search-iq の閲覧者にする必要があり、閲覧者には同じワークスペースの
+  全レイクハウスの SQL エンドポイントを読む権限が付く（operations_log §20）。
 
 【元テナントで使う場合】既存ワークスペースには作らず、**新しいワークスペース名**で作る。
   既存容量への割り当てには容量の管理者（または共同作成者）権限が要る。
@@ -21,6 +27,8 @@ Fabric のワークスペースを作って容量に割り当て、レイクハ�
 【実機でわかったこと（新テナント、2026-09-21）】
   - 日本語を含む JSON を curl にシェル経由で渡すと文字化けして InvalidInput になった。
     このスクリプトは UTF-8 のバイト列を直接送るので問題ない。
+  - grp-quality-team の ID は Graph で引く。セキュリティ既定値で Graph が使えないときは
+    QUALITY_TEAM_GROUP_ID を設定する（無ければ閲覧者の付与だけスキップ）。
   - アイテムの作成は /items に "type" をボディで渡す（クエリ文字列の itemType では 400）。
   - GET /ontologies は 200 を返すが中身が空で、作成済みでも一覧に出てこない。
     存在確認は GET /items で行う（このスクリプトもそうしている）。
@@ -38,12 +46,81 @@ import sys
 import _http as h
 
 WS_NAME = os.environ.get("FABRIC_WORKSPACE_NAME", "ws-agent-search-iq")
+RESTRICTED_WS_NAME = os.environ.get("FABRIC_RESTRICTED_WORKSPACE_NAME",
+                                    "ws-agent-search-iq-restricted")
 CAPACITY_NAME = os.environ.get("FABRIC_CAPACITY_NAME")
+QUALITY_GROUP_NAME = "grp-quality-team"
+# レイクハウス名 → (置き場所, 説明)。"main" = WS_NAME、"restricted" = RESTRICTED_WS_NAME
 LAKEHOUSES = {
-    "lh_public": "全社公開のテーブル。全社員グループに読み取りを付与する",
-    "lh_restricted": "品質チーム限定のテーブル。品質チームグループだけに読み取りを付与する",
+    "lh_public": ("main", "全社公開のテーブル。全社員グループに読み取りを付与する"),
+    "lh_restricted": ("restricted", "品質チーム限定のテーブル。閲覧者は品質チームグループだけ"),
 }
 ONTOLOGY_NAME = os.environ.get("FABRIC_ONTOLOGY_NAME", "ont_agent_search_iq")
+
+
+def ensure_workspace(tok: str, name: str, desc: str, cap: dict, dry_run: bool) -> str | None:
+    """ワークスペースを作って容量に割り当てる。dry-run で未作成なら None。"""
+    print(f"\n■ ワークスペース {name}")
+    _s, _h, wss = h.call("GET", h.FABRIC + "/workspaces", tok)
+    ws = next((w for w in wss.get("value", []) if w["displayName"] == name), None)
+    if ws:
+        h.step(False, f"既存: id={ws['id']}")
+    else:
+        h.step(dry_run, "作成")
+        if dry_run:
+            return None
+        s, _h, ws = h.call("POST", h.FABRIC + "/workspaces", tok,
+                           {"displayName": name, "description": desc})
+        if s >= 300:
+            sys.exit(f"ワークスペース作成に失敗: {ws}")
+    wsid = ws["id"]
+
+    _s, _h, wd = h.call("GET", h.FABRIC + f"/workspaces/{wsid}", tok)
+    if wd.get("capacityId") == cap["id"]:
+        h.step(False, "容量: 割り当て済み")
+    else:
+        h.step(dry_run, f"容量に割り当て（現在: {wd.get('capacityId')}）")
+        if not dry_run:
+            s, _h, r = h.call("POST", h.FABRIC + f"/workspaces/{wsid}/assignToCapacity", tok,
+                              {"capacityId": cap["id"]})
+            if s >= 300:
+                sys.exit(f"容量の割り当てに失敗: {r}")
+    return wsid
+
+
+def quality_group_id() -> str | None:
+    gid = os.environ.get("QUALITY_TEAM_GROUP_ID")
+    if gid:
+        return gid
+    try:
+        gtok = h.az(["account", "get-access-token", "--resource", "https://graph.microsoft.com",
+                     "--query", "accessToken", "-o", "tsv"])
+    except RuntimeError:
+        return None
+    _s, _h, r = h.call("GET", h.url(h.GRAPH, "/groups",
+                                    **{"$filter": f"displayName eq '{QUALITY_GROUP_NAME}'",
+                                       "$select": "id"}), gtok)
+    v = (r or {}).get("value") or []
+    return v[0]["id"] if v else None
+
+
+def ensure_viewer(tok: str, wsid: str | None, group_id: str | None, dry_run: bool) -> None:
+    print(f"\n■ {RESTRICTED_WS_NAME} の閲覧者")
+    if not group_id:
+        print(f"  [!!] {QUALITY_GROUP_NAME} の ID が分からないので付与をスキップ"
+              "（QUALITY_TEAM_GROUP_ID を設定して再実行するか、ポータルで閲覧者に追加する）")
+        return
+    if wsid:
+        _s, _h, ra = h.call("GET", h.FABRIC + f"/workspaces/{wsid}/roleAssignments", tok)
+        if any(r["principal"]["id"] == group_id for r in ra.get("value", [])):
+            h.step(False, f"既存: {QUALITY_GROUP_NAME}")
+            return
+    h.step(dry_run, f"{QUALITY_GROUP_NAME} を閲覧者に追加")
+    if not dry_run:
+        s, _h, r = h.call("POST", h.FABRIC + f"/workspaces/{wsid}/roleAssignments", tok,
+                          {"principal": {"id": group_id, "type": "Group"}, "role": "Viewer"})
+        if s >= 300:
+            sys.exit(f"閲覧者の追加に失敗: {r}")
 
 
 def main() -> None:
@@ -64,59 +141,47 @@ def main() -> None:
     if cap["state"] != "Active":
         print("  ※ 容量が Active ではない。割り当てやアイテム作成が失敗するので先に再開する")
 
-    print(f"\n■ ワークスペース {WS_NAME}")
-    _s, _h, wss = h.call("GET", h.FABRIC + "/workspaces", tok)
-    ws = next((w for w in wss.get("value", []) if w["displayName"] == WS_NAME), None)
-    if ws:
-        h.step(False, f"既存: id={ws['id']}")
-    else:
-        h.step(a.dry_run, "作成")
-        if a.dry_run:
-            print("\n（dry-run：ワークスペースが無いので以降は作成予定の一覧のみ）")
-            for n in LAKEHOUSES:
-                h.step(True, f"レイクハウス {n} を作成")
-            h.step(True, f"オントロジー {ONTOLOGY_NAME} を作成")
-            return
-        s, _h, ws = h.call("POST", h.FABRIC + "/workspaces", tok, {
-            "displayName": WS_NAME,
-            "description": "Fabric IQ (Ontology) permission demo: lakehouses / Direct Lake model / ontology"})
-        if s >= 300:
-            sys.exit(f"ワークスペース作成に失敗: {ws}")
-    wsid = ws["id"]
+    wsids = {
+        "main": ensure_workspace(
+            tok, WS_NAME,
+            "Fabric IQ (Ontology) permission demo: public lakehouse / Direct Lake model / ontology",
+            cap, a.dry_run),
+        "restricted": ensure_workspace(
+            tok, RESTRICTED_WS_NAME,
+            "Fabric IQ permission demo: quality-team-only data. Viewer = grp-quality-team only",
+            cap, a.dry_run),
+    }
+    ensure_viewer(tok, wsids["restricted"], quality_group_id(), a.dry_run)
 
-    _s, _h, wd = h.call("GET", h.FABRIC + f"/workspaces/{wsid}", tok)
-    if wd.get("capacityId") == cap["id"]:
-        h.step(False, "容量: 割り当て済み")
-    else:
-        h.step(a.dry_run, f"容量に割り当て（現在: {wd.get('capacityId')}）")
-        if not a.dry_run:
-            s, _h, r = h.call("POST", h.FABRIC + f"/workspaces/{wsid}/assignToCapacity", tok,
-                              {"capacityId": cap["id"]})
-            if s >= 300:
-                sys.exit(f"容量の割り当てに失敗: {r}")
-
-    _s, _h, items = h.call("GET", h.FABRIC + f"/workspaces/{wsid}/items", tok)
-    existing = {(i["type"], i["displayName"]): i["id"] for i in items.get("value", [])}
+    existing: dict[str, dict] = {}
+    for key, wsid in wsids.items():
+        existing[key] = {}
+        if wsid:
+            _s, _h, items = h.call("GET", h.FABRIC + f"/workspaces/{wsid}/items", tok)
+            existing[key] = {(i["type"], i["displayName"]): i["id"] for i in items.get("value", [])}
 
     print("\n■ レイクハウス")
     ids: dict[str, str] = {}
-    for name, desc in LAKEHOUSES.items():
-        if ("Lakehouse", name) in existing:
-            ids[name] = existing[("Lakehouse", name)]
+    for name, (where, desc) in LAKEHOUSES.items():
+        if ("Lakehouse", name) in existing[where]:
+            ids[name] = existing[where][("Lakehouse", name)]
             h.step(False, f"既存: {name}  id={ids[name]}")
             continue
-        h.step(a.dry_run, f"作成: {name}")
+        h.step(a.dry_run, f"作成: {name}（{WS_NAME if where == 'main' else RESTRICTED_WS_NAME}）")
         if not a.dry_run:
-            s, hd, r = h.call("POST", h.FABRIC + f"/workspaces/{wsid}/items", tok,
+            s, hd, r = h.call("POST", h.FABRIC + f"/workspaces/{wsids[where]}/items", tok,
                               {"displayName": name, "type": "Lakehouse", "description": desc})
             s, r = h.wait_lro(tok, s, hd, r)
             if s >= 300:
                 sys.exit(f"{name} の作成に失敗: {r}")
             ids[name] = r["id"]
+    if ("Lakehouse", "lh_restricted") in existing["main"]:
+        print(f"  [!!] {WS_NAME} にも lh_restricted がある。閲覧者に SQL 経由で漏れるので削除すること")
 
     print("\n■ オントロジー")
-    if ("Ontology", ONTOLOGY_NAME) in existing:
-        ids[ONTOLOGY_NAME] = existing[("Ontology", ONTOLOGY_NAME)]
+    wsid = wsids["main"]
+    if ("Ontology", ONTOLOGY_NAME) in existing["main"]:
+        ids[ONTOLOGY_NAME] = existing["main"][("Ontology", ONTOLOGY_NAME)]
         h.step(False, f"既存: {ONTOLOGY_NAME}  id={ids[ONTOLOGY_NAME]}")
     else:
         h.step(a.dry_run, f"作成: {ONTOLOGY_NAME}（付随の Lakehouse / GraphModel も自動で作られる）")
@@ -133,18 +198,23 @@ def main() -> None:
                                       if i["type"] == "Ontology" and i["displayName"] == ONTOLOGY_NAME)
 
     print("\n=== 次のスクリプトに渡す値（ファイルには保存していない）===")
-    print(f"  FABRIC_WORKSPACE_ID            = {wsid}")
+    if wsids["main"]:
+        print(f"  {'FABRIC_WORKSPACE_ID':40s} = {wsids['main']}")
+    if wsids["restricted"]:
+        print(f"  {'FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID':40s} = {wsids['restricted']}")
     for k, env in (("lh_public", "FABRIC_LAKEHOUSE_PUBLIC_ID"),
                    ("lh_restricted", "FABRIC_LAKEHOUSE_RESTRICTED_ID"),
                    (ONTOLOGY_NAME, "FABRIC_ONTOLOGY_ID")):
         if k in ids:
-            print(f"  {env:30s} = {ids[k]}")
+            print(f"  {env:40s} = {ids[k]}")
     print("\n権限付与はポータルで行う（アイテム単位の権限は API 非対応）:")
     print(f"  {ONTOLOGY_NAME} → 全社員グループ（読み取り）")
     print("  lh_public         → 全社員グループ")
-    print("  lh_restricted     → 品質チームグループのみ")
-    print("  レイクハウスはどちらも「すべての SQL エンドポイント データを読み取る」と")
-    print("  「すべての Apache Spark を読み取り…」にチェックする（既定の共有だけでは 401）")
+    print("    「すべての SQL エンドポイント データを読み取る」と")
+    print("    「すべての Apache Spark を読み取り…」にチェックする（既定の共有だけでは 401）")
+    print(f"  lh_restricted     → 品質チームグループ（{RESTRICTED_WS_NAME} の閲覧者に加えて必須）")
+    print("    同じく「すべての Apache Spark を読み取り…」にチェック。閲覧者だけだと Fabric IQ で拒否される")
+    print("    グループで効かなければ、所属ユーザー個人にも共有する（検証ではそれで通った）")
 
 
 if __name__ == "__main__":

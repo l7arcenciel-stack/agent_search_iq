@@ -38,6 +38,8 @@
     $env:FABRIC_WORKSPACE_ID            = "<ワークスペースID>"
     $env:FABRIC_LAKEHOUSE_PUBLIC_ID     = "<lh_public のID>"
     $env:FABRIC_LAKEHOUSE_RESTRICTED_ID = "<lh_restricted のID>"
+    # lh_restricted を別ワークスペースに置く場合だけ（省略時は FABRIC_WORKSPACE_ID）
+    $env:FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID = "<lh_restricted のあるワークスペースID>"
     $env:FABRIC_ONTOLOGY_ID             = "<オントロジーのアイテムID>"
     python fabric_notebooks/03_create_ontology_definition.py --dry-run
     python fabric_notebooks/03_create_ontology_definition.py
@@ -68,6 +70,13 @@ SCHEMA = "https://developer.microsoft.com/json-schemas/fabric/item/ontology"
 LAKEHOUSE_ENV = {
     "public": "FABRIC_LAKEHOUSE_PUBLIC_ID",
     "restricted": "FABRIC_LAKEHOUSE_RESTRICTED_ID",
+}
+
+# レイクハウスがオントロジーと別のワークスペースにある場合のワークスペースID（任意）。
+# ワークスペースの閲覧者には SQL エンドポイント経由の読み取りが付くため、
+# 同じワークスペースに置くと閲覧者全員が限定データを読めてしまう（operations_log §20）。
+LAKEHOUSE_WORKSPACE_ENV = {
+    "restricted": "FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID",
 }
 
 _DOC_PROPS = [
@@ -119,9 +128,11 @@ RELATIONSHIPS: dict[str, tuple[str, str, str, str, str, str]] = {
     "public_document_describes_product": (
         "quality_document_public", "product", "edge_document_public_product",
         "document_id", "product_id", "public"),
-    "restricted_document_describes_product": (
-        "quality_document_restricted", "product", "edge_document_restricted_product",
-        "document_id", "product_id", "restricted"),
+    # restricted_document_describes_product（限定文書 → 製品）は定義しない。
+    # 限定文書とエッジは lh_restricted、製品は lh_public にあり、このように別のレイクハウスの
+    # ノードを結ぶエッジは GraphModel に取り込まれず、管理者でも "does not match any edge type"
+    # になった。しかも定義があるだけで、品質文書に関する自然文検索がこのエッジを使おうとして
+    # 全員失敗する（operations_log §20-2）。限定文書は product_id プロパティで製品と対応付ける。
 }
 
 
@@ -226,9 +237,9 @@ def build_entity(name: str) -> dict:
     }
 
 
-def build_static_binding(name: str, workspace_id: str, lakehouses: dict[str, str]) -> dict:
+def build_static_binding(name: str, lakehouses: dict[str, tuple[str, str]]) -> dict:
     _key, props, table, scope = ENTITIES[name]
-    lakehouse_id = lakehouses[scope]
+    workspace_id, lakehouse_id = lakehouses[scope]
     return {
         "$schema": f"{SCHEMA}/dataBinding/1.0.0/schema.json",
         "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"static::{name}")),
@@ -249,10 +260,10 @@ def build_static_binding(name: str, workspace_id: str, lakehouses: dict[str, str
     }
 
 
-def build_timeseries_binding(name: str, workspace_id: str, lakehouses: dict[str, str]) -> dict:
+def build_timeseries_binding(name: str, lakehouses: dict[str, tuple[str, str]]) -> dict:
     table, ts_col, tsp = TIMESERIES[name]
     key_col, _props, _t, scope = ENTITIES[name]
-    lakehouse_id = lakehouses[scope]
+    workspace_id, lakehouse_id = lakehouses[scope]
     # エンティティのキー列も一緒に渡す。これが無いと、どの行がどのエンティティの
     # 時系列なのかを結び付けられない。
     bindings = [{"sourceColumnName": key_col, "targetPropertyId": _id("prop", name, key_col)}]
@@ -291,11 +302,11 @@ def build_relationship(name: str) -> dict:
     }
 
 
-def build_contextualization(name: str, workspace_id: str, lakehouses: dict[str, str]) -> dict:
+def build_contextualization(name: str, lakehouses: dict[str, tuple[str, str]]) -> dict:
     src, tgt, edge, src_col, tgt_col, scope = RELATIONSHIPS[name]
     src_key, _p, _t, _s1 = ENTITIES[src]
     tgt_key, _p2, _t2, _s2 = ENTITIES[tgt]
-    lakehouse_id = lakehouses[scope]
+    workspace_id, lakehouse_id = lakehouses[scope]
     return {
         "$schema": f"{SCHEMA}/contextualization/1.0.0/schema.json",
         "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"ctx::{name}")),
@@ -315,7 +326,7 @@ def build_contextualization(name: str, workspace_id: str, lakehouses: dict[str, 
     }
 
 
-def build_parts(workspace_id: str, lakehouses: dict[str, str]) -> list[dict]:
+def build_parts(lakehouses: dict[str, tuple[str, str]]) -> list[dict]:
     parts = [
         {"path": "definition.json", "payload": _b64({}), "payloadType": "InlineBase64"}
     ]
@@ -326,16 +337,16 @@ def build_parts(workspace_id: str, lakehouses: dict[str, str]) -> list[dict]:
     for name in ENTITIES:
         eid = _id("entity", name)
         add(f"EntityTypes/{eid}/definition.json", build_entity(name))
-        b = build_static_binding(name, workspace_id, lakehouses)
+        b = build_static_binding(name, lakehouses)
         add(f"EntityTypes/{eid}/DataBindings/{b['id']}.json", b)
         if name in TIMESERIES:
-            tb = build_timeseries_binding(name, workspace_id, lakehouses)
+            tb = build_timeseries_binding(name, lakehouses)
             add(f"EntityTypes/{eid}/DataBindings/{tb['id']}.json", tb)
 
     for name in RELATIONSHIPS:
         rid = _id("rel", name)
         add(f"RelationshipTypes/{rid}/definition.json", build_relationship(name))
-        c = build_contextualization(name, workspace_id, lakehouses)
+        c = build_contextualization(name, lakehouses)
         add(f"RelationshipTypes/{rid}/Contextualizations/{c['id']}.json", c)
 
     return parts
@@ -402,7 +413,14 @@ def main() -> None:
     dry_run = "--dry-run" in sys.argv
 
     workspace_id = _required("FABRIC_WORKSPACE_ID")
-    lakehouses = {scope: _required(env) for scope, env in LAKEHOUSE_ENV.items()}
+    # scope → (レイクハウスのワークスペースID, レイクハウスID)
+    lakehouses = {
+        scope: (os.environ.get(LAKEHOUSE_WORKSPACE_ENV.get(scope, "")) or workspace_id, _required(env))
+        for scope, env in LAKEHOUSE_ENV.items()
+    }
+    for scope, (ws, _lh) in lakehouses.items():
+        if ws != workspace_id:
+            print(f"{scope}: 別ワークスペースのレイクハウスにバインドします（{ws}）")
 
     if not dry_run:
         token = _token()
@@ -410,7 +428,7 @@ def main() -> None:
         n = load_existing_ids(token, workspace_id, ontology_id)
         print(f"既存のidを {n} 件引き継ぎました")
 
-    parts = build_parts(workspace_id, lakehouses)
+    parts = build_parts(lakehouses)
 
     if dry_run:
         for p in parts:
@@ -441,7 +459,7 @@ def main() -> None:
     print("     （バインド保存時に取り込みが走るので、初回は手動リフレッシュ不要だった）")
     print("  2. 権限はレイクハウス単位で付与する（エンティティ単位の権限は無い）:")
     print("       lh_public     → 全社員グループ")
-    print("       lh_restricted → 品質チームグループのみ")
+    print("       lh_restricted → 品質チームグループのみ（限定用ワークスペースに置き、閲覧者＋ReadAll 付き共有）")
     print("     いずれも『すべての SQL エンドポイント データを読み取る』と")
     print("     『すべての Apache Spark を読み取り…』にチェックが必要")
     print("  3. オントロジー自体への読み取りも両グループに付与する")

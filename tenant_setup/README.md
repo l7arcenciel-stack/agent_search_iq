@@ -27,7 +27,7 @@
 | 1 | `infra/main.bicep` | Foundry・AI Search・モデル・Fabric 容量（`infra/README.md`） | サブスクリプションの共同作成者以上 |
 | 2 | `tenant_setup/10_entra_groups_users.py` | セキュリティグループ2つ、テストユーザー2人、ライセンス | ユーザー管理者＋グループ管理者 |
 | 3 | `tenant_setup/20_entra_app_registration.py` | OBO 用アプリ登録、委任権限、**管理者同意**、シークレット | アプリケーション管理者＋同意できる管理者 |
-| 4 | `tenant_setup/30_fabric_items.py` | ワークスペース（容量へ割り当て）、`lh_public` / `lh_restricted`、オントロジー | Fabric 容量の共同作成者以上 |
+| 4 | `tenant_setup/30_fabric_items.py` | ワークスペース2つ（容量へ割り当て）、`lh_public`、オントロジー、限定用ワークスペースの `lh_restricted` と品質チームの閲覧者ロール | Fabric 容量の共同作成者以上 |
 | 5 | `fabric_notebooks/01_create_delta_tables.py` | Delta テーブル（Fabric ノートブックで2回） | ワークスペースの共同作成者 |
 | 6 | `fabric_notebooks/02_create_semantic_model.py` | Direct Lake のセマンティックモデル | 同上 |
 | 7 | `fabric_notebooks/03_create_ontology_definition.py` | オントロジーの定義とバインド | 同上 |

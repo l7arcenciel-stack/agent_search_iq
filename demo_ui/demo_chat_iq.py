@@ -109,6 +109,10 @@ _EXAMPLE_QUESTIONS = [
     "製品A008の品質基準について教えて",
     "地域別の売上金額を教えて",
     "A008の品質情報と、関連する商品群の売上をまとめて",
+    # 上の3問では品質文書を AI Search から取るため、オントロジーの限定エンティティは
+    # 使われない。オントロジー側の分離（lh_restricted の権限）を見せるための質問
+    # 「オントロジーから」だけだと AI Search で済ませることがあったので、エンティティ名まで書く
+    "A008の限定の品質文書（quality_document_restricted）を、文書検索は使わずFabric IQだけで調べて",
 ]
 
 st.set_page_config(page_title="社内ナレッジアシスタント（Fabric IQ）", page_icon="🕸")

@@ -320,7 +320,7 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
         <li><b>ワークスペースのロールが無い</b>（オントロジーのアイテム共有だけ）→ Fabric IQ のツール一覧取得が 403。エージェントは質問のたびに最初にツール一覧を取るため、<b>Fabric IQ を使わない質問まで含めて回答が空</b>になる</li>
         <li><b>セマンティックモデルのビルド権限が無い</b>（ワークスペース閲覧者には付かない）→ 売上の DAX 照会が 404。エージェントは<b>「閲覧権限がないため回答できません」</b>と答えるので、権限デモの正しい挙動に見えてしまう</li>
       </ul>
-      <p class="fix">→ <a href="#s4-7">4-7</a> で、デモユーザーを<b>ワークスペースの閲覧者</b>にし、モデルに<b>ビルド</b>を付ける。閲覧者にしても <code>lh_restricted</code> は読めない（閲覧者にはレイクハウスの全データ読み取りが付かない）ので、権限分離は崩れない。</p>
+      <p class="fix">→ <a href="#s4-7">4-7</a> で、デモユーザーを<b>ワークスペースの閲覧者</b>にし、モデルに<b>ビルド</b>を付ける。<b>ただし閲覧者には、同じワークスペースの全レイクハウスの SQL エンドポイントを読む権限が付く。</b><code>lh_restricted</code> を同じワークスペースに置くと、未所属ユーザーが SQL とオントロジーのインスタンス画面から限定データを読めてしまう（2026-09-22 に実機で確認）。そのため <code>lh_restricted</code> は<b>別ワークスペース <code>ws-agent-search-iq-restricted</code></b> に置き、閲覧者は品質チームグループだけにする（<a href="#s4-4">4-4</a>）。</p>
     </div>
   </div>
 
@@ -537,10 +537,13 @@ if ($actual -ne $expected) { throw "テナントが違います: $actual (期待
     </ul>
     <p>つまり<b>レイクハウスのアイテム権限は全か無か</b>で、テーブル単位の制御は効かない。OneLake セキュリティなら行・列レベルの制御ができるが、<b>有効にするとオントロジーのバインド対象から外れる</b>ため使えない（共有ダイアログに「OneLake セキュリティ」タブがあるので紛らわしい）。</p>
     <p><b>解決策：閲覧範囲ごとにレイクハウスを分ける。</b>エンティティのデータ問い合わせは<b>バインド元のレイクハウス単位で個別に認可される</b>ので、これでエンティティ単位の分離が成立する。<b>オントロジーは1つのままでよい。</b></p>
-    <pre>lh_public      … 全社公開のエンティティ    → 全社員グループに読み取り
-lh_restricted  … 品質チーム限定のエンティティ → 品質チームグループのみに読み取り
-        ↓ どちらも同じオントロジーにバインドする
-ont_agent_search_iq</pre>
+    <pre>ws-agent-search-iq（デモユーザー全員が閲覧者）
+  lh_public      … 全社公開のエンティティ    → 全社員グループに読み取り
+  ont_agent_search_iq
+ws-agent-search-iq-restricted（閲覧者は品質チームグループだけ）
+  lh_restricted  … 品質チーム限定のエンティティ
+        ↓ どちらも同じオントロジーにバインドする（別ワークスペースのレイクハウスもバインドできる）</pre>
+    <p><b><code>lh_restricted</code> はオントロジーと別のワークスペースに置く。</b>デモユーザーは Fabric IQ を使うためにオントロジーのワークスペースの閲覧者にする必要があり（<a href="#s4-7">4-7</a>）、閲覧者には同じワークスペースの全レイクハウスの SQL エンドポイントを読む権限が付くため。</p>
     <p>レイクハウスを共有するときは、<b>「すべての SQL エンドポイント データを読み取る」と「すべての Apache Spark を読み取り…」にチェックが必要</b>。既定の共有だけではデータを引けない（401 のまま）。</p>
   </div>
 
@@ -732,7 +735,8 @@ Entity type names must be unique within a namespace.</pre>
       <dt>手順</dt><dd><ol>
         <li><b>オントロジー</b>への読み取りを <b>全社員グループ</b>に付与する（品質チームのメンバーも全社員グループに入っているので、これで2人とも届く）。</li>
         <li><b><code>lh_public</code></b> への読み取りを <b>全社員グループ</b>に付与する。</li>
-        <li><b><code>lh_restricted</code></b> への読み取りを <b>品質チームグループだけ</b>に付与する。</li>
+        <li><b><code>lh_restricted</code></b> は <code>ws-agent-search-iq-restricted</code> に置き、<b>品質チームグループを閲覧者</b>にする（<span class="path">tenant_setup/30_fabric_items.py</span> が行う）。<b>さらに <code>lh_restricted</code> を品質チームグループに ReadAll 付きで共有する（必須）。</b>閲覧者だけでは、ポータルでは見えるのに Fabric IQ（MCP）では拒否され、エージェントが <code>Function failed</code> になる（2026-09-22 に確認）。<br>
+        グループに共有して20分ほどたっても効かなかったため、検証では<b>所属ユーザー個人にも共有</b>して通した。グループだけで効くか（反映待ちだったのか）は未確認。</li>
         <li>レイクハウスの共有では<b>「すべての SQL エンドポイント データを読み取る」と「すべての Apache Spark を読み取り…」にチェック</b>を入れる。「受信者にメールで通知する」は外す。</li>
       </ol>
       <b>権限はテーブル単位ではなくレイクハウス単位でしか切れない</b>（4-1 の注意枠）。テーブルに個別の権限を付ける画面は無い。</dd>
@@ -769,7 +773,7 @@ export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;
       <dt>手順</dt><dd><ol>
         <li>オントロジーの <span class="path">アクセス許可の管理</span> で、両ユーザー（またはグループ）に<b>読み取り</b>を付与する。</li>
         <li><b><code>lh_public</code> には全社員グループ</b>に読み取りを付与する。共有ダイアログで<b>「すべての SQL エンドポイント データを読み取る」と「すべての Apache Spark を読み取り…」にチェック</b>を入れる（既定の共有だけではデータを引けない）。</li>
-        <li><b><code>lh_restricted</code> には品質チームグループだけ</b>に、同じ条件で付与する。</li>
+        <li><b><code>lh_restricted</code></b> は <code>ws-agent-search-iq-restricted</code> にあり、閲覧者が品質チームグループだけであることを確認する（4-4）。</li>
         <li>未所属ユーザーでオントロジーを開き、公開エンティティと限定エンティティの <span class="path">インスタンス</span> タブをそれぞれ見る。</li>
       </ol></dd>
       <dt>確認方法</dt><dd>
@@ -778,7 +782,8 @@ export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;
         <code>401 Unauthorized / Authentication is required.</code> になる。<b>これが正しい状態。</b><br>
         あわせて所属ユーザーでも開き、<b>両方とも見える</b>ことを確認する。
       </dd>
-      <dt>落とし穴</dt><dd><b>限定エンティティの行が見えてしまったら、レイクハウスの分け方が間違っている。</b>1つのレイクハウスにまとめていないか、未所属ユーザーに <code>lh_restricted</code> の権限が漏れていないかを確認する。<br>
+      <dt>落とし穴</dt><dd><b>限定エンティティの行が見えてしまったら、レイクハウスの分け方が間違っている。</b>1つのレイクハウスにまとめていないか、<b><code>lh_restricted</code> がオントロジーと同じワークスペースに無いか</b>、未所属ユーザーに <code>lh_restricted</code> の権限が漏れていないかを確認する。<br>
+        <b>4-7 のあとにもう一度この確認をする。</b>閲覧者を付けたことで漏れるケースがあった（2026-09-22、同じワークスペースに置いていたとき）。未所属ユーザーで <code>lh_restricted</code> の SQL エンドポイントを開けないことも確かめる。<br>
         <b>エンティティ名と列名は権限に関係なく見える。</b>隠せるのは中身だけなので、<b>エンティティ名自体を秘密にしない</b>（例: <code>merger_project_codenames</code> のような名前を付けない）。<br>
         共有時の「受信者にメールで通知する」は、メールボックスの無いテストユーザーでは外しておく。</dd>
     </dl>
@@ -790,7 +795,7 @@ export AZURE_OPENAI_API_KEY=$(az cognitiveservices account keys list --name &lt;
       <dt>目的</dt><dd>エージェント経由（本人のトークン）で Fabric IQ と売上の照会が通るようにする。4-6 のポータル確認が通っても、これが無いとエージェントからは使えない。</dd>
       <dt>どこで</dt><dd>Fabric ポータル。ワークスペースの <span class="path">アクセスの管理</span> と、セマンティックモデル <span class="path">sm_agent_search_iq &gt; … &gt; 権限の管理</span></dd>
       <dt>手順</dt><dd><ol>
-        <li>ワークスペースの <span class="path">アクセスの管理</span> で、<b>全社員グループ</b>（またはテストユーザー2人）を<b>閲覧者（Viewer）</b>として追加する。</li>
+        <li><code>ws-agent-search-iq</code> の <span class="path">アクセスの管理</span> で、<b>全社員グループ</b>（またはテストユーザー2人）を<b>閲覧者（Viewer）</b>として追加する。<b><code>ws-agent-search-iq-restricted</code> には追加しない。</b></li>
         <li>セマンティックモデルの <span class="path">権限の管理 &gt; ユーザーの追加</span> で、同じ相手に<b>ビルド</b>（「このデータセットを使用してコンテンツを作成することをユーザーに許可する」）を付ける。</li>
         <li>ポータルの既定では<b>書き込み・再共有まで付く</b>ので外し、<b>「ワークスペース ビューアー, ビルド」</b>だけにする。</li>
       </ol>
@@ -937,6 +942,7 @@ $env:FABRIC_IQ_ONTOLOGY_ITEM_ID       = "&lt;4-3 のオントロジーアイテ�
         <tr><td><code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code></td><td>オントロジーのアイテムID</td><td>4-3 の URL</td><td>.env</td></tr>
         <tr><td><code>FABRIC_LAKEHOUSE_PUBLIC_ID</code></td><td><code>lh_public</code> のID（<span class="path">03</span> 用）</td><td><span class="path">00_check_status.py</span> の出力</td><td>実行時に指定</td></tr>
         <tr><td><code>FABRIC_LAKEHOUSE_RESTRICTED_ID</code></td><td><code>lh_restricted</code> のID（<span class="path">03</span> 用）</td><td>同上</td><td>実行時に指定</td></tr>
+        <tr><td><code>FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID</code></td><td><code>ws-agent-search-iq-restricted</code> のID（<span class="path">03</span> 用）</td><td>同上</td><td>実行時に指定</td></tr>
         <tr><td><code>FABRIC_ONTOLOGY_ID</code></td><td>オントロジーのアイテムID（<span class="path">03</span> 用。<code>FABRIC_IQ_ONTOLOGY_ITEM_ID</code> と同じ値）</td><td>同上</td><td>実行時に指定</td></tr>
         <tr><td><code>FABRIC_SQL_ENDPOINT</code> / <code>FABRIC_SQL_DATABASE_ID</code></td><td><code>lh_public</code> の SQL エンドポイントの接続文字列とID（<span class="path">02</span> 用）</td><td><code>GET /lakehouses/&lt;id&gt;</code> の <code>sqlEndpointProperties</code></td><td>実行時に指定</td></tr>
         <tr><td><code>FABRIC_IQ_TOOLBOX_NAME</code></td><td>Toolbox 名</td><td>5-4 で自分で決める</td><td>.env</td></tr>

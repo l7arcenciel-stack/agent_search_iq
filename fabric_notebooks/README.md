@@ -12,7 +12,7 @@
 | ファイル | 役割 | 実行場所 |
 |---|---|---|
 | `00_check_status.py` | **作業再開時に最初に実行する。** 構築状況を点検し、次の手順と現在の環境変数を表示する（読み取りのみ） | **手元の PC** |
-| `01_create_delta_tables.py` | オントロジーにバインドする Delta マネージドテーブルを作る。**`TARGET` を変えて2回実行**（lh_public / lh_restricted） | **Fabric のノートブック**（pyspark。手元では動かない） |
+| `01_create_delta_tables.py` | オントロジーにバインドする Delta マネージドテーブルを作る。**`TARGET` を変えて2回実行**（lh_public / lh_restricted。lh_restricted は限定用ワークスペース `ws-agent-search-iq-restricted` 側のノートブックで実行する） | **Fabric のノートブック**（pyspark。手元では動かない） |
 | `02_create_semantic_model.py` | Direct Lake のセマンティックモデルを作る | **手元の PC**（`az login` 済みで REST API を叩く） |
 | `03_create_ontology_definition.py` | オントロジーの定義（エンティティ型・バインド・リレーション型）を流し込む | **手元の PC** |
 
@@ -53,9 +53,11 @@ python fabric_notebooks/02_create_semantic_model.py
 オントロジーのアイテムを作ってから実行する。
 
 ```powershell
-$env:FABRIC_WORKSPACE_ID = "<ワークスペースID>"
-$env:FABRIC_LAKEHOUSE_ID = "<バインド元のレイクハウスID>"
-$env:FABRIC_ONTOLOGY_ID  = "<オントロジーのアイテムID>"
+$env:FABRIC_WORKSPACE_ID                      = "<ワークスペースID>"
+$env:FABRIC_LAKEHOUSE_PUBLIC_ID               = "<lh_public のID>"
+$env:FABRIC_LAKEHOUSE_RESTRICTED_ID           = "<lh_restricted のID>"
+$env:FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID = "<lh_restricted のあるワークスペースID>"
+$env:FABRIC_ONTOLOGY_ID                       = "<オントロジーのアイテムID>"
 python fabric_notebooks/03_create_ontology_definition.py --dry-run
 python fabric_notebooks/03_create_ontology_definition.py
 ```

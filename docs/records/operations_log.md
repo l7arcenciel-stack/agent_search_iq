@@ -573,6 +573,93 @@ azd env get-values > .env        # ※ BOM なしで書き直した（下記）
 
 ---
 
+## 20. ワークスペース閲覧者だと限定文書が漏れる（2026-09-22）
+
+§18-1 で「閲覧者でも分離は崩れない」としたのは、MCP と OneLake だけで確かめた結果だった。営業 次郎でポータルを確認した。
+
+| 確認（営業 次郎） | 結果 |
+|---|---|
+| オントロジーの `quality_document_restricted` → インスタンス | **2件表示（QD-A007 / QD-A008）** ❌ |
+| `lh_restricted` のレイクハウス画面 | 「このアイテムへのアクセスが制限されています」 |
+| `lh_restricted` の SQL 分析エンドポイントで `SELECT * FROM quality_document_restricted` | **2件返る** ❌ |
+| 自動生成の `ont_agent_search_iq_lh_…` | テーブル無し（経路ではない） |
+
+- `lh_restricted` の「アクセス許可の管理」：次郎・太郎は**ワークスペース ビューアー**で「読み取り, ViewOutput」、
+  `grp-quality-team` は「読み取り, ReadAll」。**ReadAll が無くても、閲覧者の「読み取り」で SQL エンドポイントは読める**
+- エージェント（Fabric IQ の MCP）経由では次郎は拒否されたまま（§18-4 の結果は正しい）。漏れているのは**直接アクセス**
+- 対策の候補：ワークスペースの閲覧者をやめる／`lh_restricted` を別ワークスペースに移す／SQL エンドポイントで DENY
+
+### 20-1. 限定データを別ワークスペースに移す（案A、実施中）
+
+- 新ワークスペース `ws-agent-search-iq-restricted`（試用容量）を API で作成し、**`grp-quality-team` だけを閲覧者**にした
+- そこにレイクハウス `lh_restricted` を作り、`01_create_delta_tables.py`（`TARGET = "restricted"`）をノートブックとして API で作成・実行 → 2テーブル作成、検証セルも通過
+- `03_create_ontology_definition.py` に `FABRIC_LAKEHOUSE_RESTRICTED_WORKSPACE_ID` を追加し、限定側だけ新ワークスペースにバインド → **API は受け付けた**。
+  GraphModel の `dataSources.json` も新ワークスペースのパスになり、`Refresh` は Completed（約3分）
+- 管理者で GraphModel に GQL（`POST /graphModels/<id>/executeQuery?preview=true`）→ `quality_document_restricted` の2件（QD-A007 / QD-A008）が取れる。
+  **別ワークスペースのレイクハウスへのバインドは動く**【確認済】
+- 別件：限定側のエッジ `restricted_document_describes_product` は**管理者でも** `does not match any edge type … security configuration enforcement` で拒否される。
+  バインドを元の `lh_restricted` に戻しても同じだったので、移したことが原因ではない。公開側のエッジ（`public_document_describes_product`）は3件取れる。
+  限定文書（`lh_restricted`）と製品（`lh_public`）という**別ソースのノードを結ぶエッジだけが拒否される**可能性【要確認】
+- ポータル（試用容量）で `quality_document_restricted` のインスタンス：**太郎 2件／次郎 `Unauthorized`（Authentication is required.）**。
+  次郎の左メニューに新ワークスペースは出ない → **オントロジー画面での分離は回復**【確認済】
+- 旧 `lh_restricted`（元ワークスペース、SQL エンドポイントごと）を API で削除。削除後も管理者の GQL で限定文書2件が取れる
+- `00_check_status.py`（限定用ワークスペースと閲覧者ロールを点検、元ワークスペースに `lh_restricted` があれば警告）と
+  `30_fabric_items.py`（限定用ワークスペース・閲覧者ロール・`lh_restricted` の作成）を新構成に合わせた。手順書・knowledge も更新
+- F2 起動後、**両ワークスペースを F2 に割り当て**（試用容量に残すと、試用の期限切れで限定データが読めなくなるため）
+- 管理者で Fabric の MCP（`ontologyEndpoint`）に直接 `search_ontology`：
+  限定文書（A008 → QD-A008）も、A008 → PG01 樹脂部品も取れた（後者は1回目だけ `-32603 internal error`、再試行で成功・約34秒）
+- F2 でデモ UI の3問を2人で実行 → **§18-4 と同じ結果**（1問目：太郎は内容、次郎は「閲覧可能な文書なし」／2問目：同じ数字／
+  3問目：2人とも Fabric IQ で A008 → PG01 → 502,320,000円、次郎は品質の欠落を明示）
+- ただし3問で**品質文書を返しているのは AI Search だけ**。Fabric IQ への問い合わせは2人とも商品群だけで、限定文書エンティティを引いていない。
+  つまりデモ3問の「見え方の差」は AI Search の ACL によるもので、オントロジーの分離はこの3問では使われていない
+- 2問目で太郎の回答に「他の地域のデータは閲覧可能な情報には含まれていませんでした」という根拠のない一文が付いた（次郎には無し）
+- 残り：太郎が MCP 経由で限定文書を引けるか（閲覧者には ReadAll が付かない）を、限定文書を直接聞く質問で確認
+
+### 20-2. 限定文書 → 製品のリレーションが使えない（別レイクハウスをまたぐエッジ）
+
+- デモ UI に4問目「A008の品質文書を、オントロジー（Fabric IQ）から調べて」を追加 → **太郎・次郎とも `Error: Function failed.`**
+- 管理者で MCP を直接呼んでも、品質文書に関する問い合わせは `(:quality_document_restricted)-[:restricted_document_describes_product]->(:%) does not match any edge type … security configuration enforcement` で失敗。
+  **`product_id` プロパティで絞るよう書いても、リレーションが定義されているとそれを使った問い合わせに変換された**
+- GQL でエッジ型ごとの件数を見ると `belongs_to_product_group` 5 / `produced_at_site` 5 / `public_document_describes_product` 3 だけで、
+  **`restricted_document_describes_product` はグラフに存在しない**（取り込まれていない）。`Refresh` は Completed でエラーも無い
+- 公開側のエッジは文書・エッジ・製品がすべて `lh_public`。限定側は文書・エッジが `lh_restricted`、製品が `lh_public`。
+  テーブルの形は同じ（`edge_id` / `document_id` / `product_id`）なので、**別のレイクハウスのノードを結ぶエッジが取り込まれない**と判断【推測：仕様か不具合かは未確認】。
+  元ワークスペースにあった頃から同じ
+- 対処：`03_create_ontology_definition.py` から `restricted_document_describes_product` を外し（エッジテーブルは残す）、
+  `agent/main.py` の指示を「限定文書は product_id プロパティで絞る。公開・限定は1回ずつ順に聞く」に変更 → オントロジー更新（Refresh 約3分）・`azd deploy`（version 7）
+- 変更後、管理者で MCP を直接：限定文書だけ → QD-A008 が取れる（約32秒）／A008 → PG01 も取れる／
+  **公開と限定を1つの質問にまとめると、エラーなしで空**（A008 は公開文書が無いので結合が空になったとみられる）→ 指示で「まとめない」とした
+
+### 20-3. 太郎が限定文書を引けない（閲覧者だけでは ReadAll が無い）
+
+- 4問目の文言を「A008の限定の品質文書（quality_document_restricted）を、文書検索は使わずFabric IQだけで調べて」に変更（「オントロジーから」だけだと AI Search で済ませた）
+- 太郎・次郎とも `Function failed.`。管理者は Toolbox 経由でも約7秒で取れる → **太郎の権限の問題**
+- **太郎がエージェント経由で限定文書を引けたことは、移動前も含めて一度も無かった**（§18-4 の品質情報は AI Search 由来）
+- 太郎の資格情報（`AZURE_CONFIG_DIR` を分けて `az login`）で Fabric の MCP を直接呼ぶと、
+  `The label expression (quality_document_restricted) does not match any node type … due to security configuration enforcement`。GQL でも同じ、公開文書は取れる
+- 太郎は `grp-quality-team` のメンバー（Graph で確認）。限定用ワークスペースの閲覧者だが、**閲覧者には ReadAll が付かない**
+- 対処（ポータル）：`lh_restricted` を `grp-quality-team` に ReadAll 付きで共有 → 約20分待っても太郎は拒否のまま（GraphModel の再取り込みもした）→
+  **太郎個人にも ReadAll 付きで直接共有** → 太郎の MCP・デモ UI の4問目とも **QD-A008 が取れた**
+- グループ共有が遅れて効いたのか、直接共有が効いたのかは**切り分けていない**（F2 の CU 消費を抑えるため打ち切り）。現在は両方付いたまま
+- 容量メトリクス（14日間）：`Ontology AI` が約 148,468 CU(s) と大半を占める（自然文検索の変換）。F2 で試行を繰り返すと重い
+
+### 20-4. 最終状態（2026-09-22）
+
+| 問い合わせ | 太郎（所属） | 次郎（未所属） |
+|---|---|---|
+| ポータル：`quality_document_restricted` のインスタンス | 2件 | 401 |
+| `lh_restricted` の SQL エンドポイント | （限定用ワークスペースの閲覧者） | ワークスペース自体が見えない |
+| デモ UI 1〜3問 | §18-4 と同じ | §18-4 と同じ |
+| デモ UI 4問目（Fabric IQ で限定文書） | QD-A008 が返る | `Function failed`（拒否）→「閲覧できない」と明示 |
+
+権限：`ws-agent-search-iq` = 2人とも閲覧者＋モデルのビルド／`ws-agent-search-iq-restricted` = `grp-quality-team` が閲覧者＋`lh_restricted` を `grp-quality-team` と太郎個人に ReadAll 付きで共有
+
+確認後、**両ワークスペースを試用容量に戻し、F2 を停止**（Inactive を API で確認）。Fabric IQ の自然文検索を使う確認・デモは F2 に戻してから行う
+
+---
+
 ## 未完了（2026-09-22 時点）
 
 - 不要だったアプリ登録②の削除
+- §20-3：`lh_restricted` の ReadAll がグループ共有だけで効くかの切り分け（今は太郎個人にも共有したまま）
+- 資料 `ontology_permission_and_demo_design.html` の第9・10章の修正（閲覧者で漏れた件と別ワークスペース化）
